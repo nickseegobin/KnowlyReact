@@ -195,15 +195,21 @@ export default function TrialPage({
         <p>{currentQ.question ?? currentQ.question_text ?? ''}</p>
       </div>
 
-      {/* Answer options */}
+      {/* Answer options — tap to select, auto-advances after 600ms */}
       <div className="card bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
         {Object.entries(currentQ.options).map(([key, value]) => (
           <button
             key={key}
-            onClick={() => setSelected(key)}
+            onClick={() => {
+              if (selected) return // already answered
+              setSelected(key)
+              setTimeout(handleNext, 600)
+            }}
             className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-colors ${
               selected === key
-                ? 'border-neutral bg-neutral text-neutral-content'
+                ? 'border-primary bg-primary text-primary-content'
+                : selected
+                ? 'border-base-300 bg-base-100 opacity-50'
                 : 'border-base-300 bg-base-100 hover:bg-base-200'
             }`}
           >

@@ -53,20 +53,22 @@ export default async function QuestTopicPage({
 
   try {
     const user = await wpFetch<AuthUser>('/auth/me', 'GET', undefined, token)
+    // levelText: only available when parent JWT is used (child JWT has no children array)
     const activeChild = user.children?.find((c) => c.child_id === user.active_child_id) ?? user.children?.[0]
     if (activeChild) {
       const level = activeChild.level
       const period = activeChild.period
       levelText = period ? `${levelLabel(level)} | ${periodLabel(period)}` : levelLabel(level)
-
-      const subjectSlug = SUBJECT_SLUG[subject] ?? subject.toLowerCase().replace(/\s+/g, '_')
-      const data = await wpFetch<{ quests: Quest[] } | Quest[]>(
-        `/quests?subject=${encodeURIComponent(subjectSlug)}`,
-        'GET', undefined, token
-      )
-      const raw = Array.isArray(data) ? data : (data as { quests: Quest[] }).quests ?? []
-      quests = raw
     }
+
+    // Quest fetch always runs — WP reads child's level/period from knowly_children table
+    const subjectSlug = SUBJECT_SLUG[subject] ?? subject.toLowerCase().replace(/\s+/g, '_')
+    const data = await wpFetch<{ quests: Quest[] } | Quest[]>(
+      `/quests?subject=${encodeURIComponent(subjectSlug)}`,
+      'GET', undefined, token
+    )
+    const raw = Array.isArray(data) ? data : (data as { quests: Quest[] }).quests ?? []
+    quests = raw
   } catch (err) {
     fetchError = err instanceof Error ? err.message : String(err)
   }

@@ -54,7 +54,6 @@ export default async function QuestTopicPage({
 
   try {
     const user = await wpFetch<AuthUser>('/auth/me', 'GET', undefined, token)
-    // levelText: only available when parent JWT is used (child JWT has no children array)
     const activeChild = user.children?.find((c) => c.child_id === user.active_child_id) ?? user.children?.[0]
     if (activeChild) {
       const level = activeChild.level
@@ -62,7 +61,7 @@ export default async function QuestTopicPage({
       levelText = period ? `${levelLabel(level)} | ${periodLabel(period)}` : levelLabel(level)
     }
 
-    // Fetch quests — pass level/period explicitly so WP doesn't need to guess from token
+    // Fetch quests — WP reads level/period from child token; pass explicitly when available
     const subjectSlug = SUBJECT_SLUG[subject] ?? subject.toLowerCase().replace(/\s+/g, '_')
     const qs = new URLSearchParams({ subject: subjectSlug })
     if (activeChild?.level) qs.set('level', activeChild.level)

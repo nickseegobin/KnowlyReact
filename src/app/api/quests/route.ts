@@ -18,9 +18,13 @@ export async function GET(req: NextRequest) {
     const rawSubject = searchParams.get('subject') ?? ''
     const subject = SUBJECT_SLUG[rawSubject] ?? rawSubject
     const topic = searchParams.get('topic') ?? ''
+    const level = searchParams.get('level') ?? ''
+    const period = searchParams.get('period') ?? ''
     const qs = new URLSearchParams()
     if (subject) qs.set('subject', subject)
     if (topic) qs.set('topic', topic)
+    if (level) qs.set('level', level)
+    if (period) qs.set('period', period)
     const query = qs.size ? `?${qs}` : ''
 
     const data = await wpFetch(`/quests${query}`, 'GET', undefined, token)

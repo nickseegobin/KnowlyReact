@@ -7,12 +7,13 @@ import type { AuthUser } from '@/types/knowly'
 
 interface Quest {
   quest_id: string | number
-  title: string
+  title?: string
+  module_title?: string   // Railway catalogue field name
   subject: string
-  topic: string
+  topic?: string
   description?: string
-  sections_count: number
-  gem_cost: number
+  sections_count?: number
+  gem_cost?: number
   completed?: boolean
   completion_count?: number
   badge_name?: string
@@ -61,14 +62,18 @@ export default async function QuestTopicPage({
       levelText = period ? `${levelLabel(level)} | ${periodLabel(period)}` : levelLabel(level)
     }
 
-    // Quest fetch always runs — WP reads child's level/period from knowly_children table
+    // Fetch quests — pass level/period explicitly so WP doesn't need to guess from token
     const subjectSlug = SUBJECT_SLUG[subject] ?? subject.toLowerCase().replace(/\s+/g, '_')
+    const qs = new URLSearchParams({ subject: subjectSlug })
+    if (activeChild?.level) qs.set('level', activeChild.level)
+    if (activeChild?.period) qs.set('period', activeChild.period)
+
     const data = await wpFetch<{ quests: Quest[] } | Quest[]>(
-      `/quests?subject=${encodeURIComponent(subjectSlug)}`,
-      'GET', undefined, token
+      `/quests?${qs}`, 'GET', undefined, token
     )
     const raw = Array.isArray(data) ? data : (data as { quests: Quest[] }).quests ?? []
-    quests = raw
+    // Filter to quests whose module_title (or topic) matches the clicked topic
+    quests = raw.filter((q) => (q.module_title ?? q.topic ?? '') === topic || raw.length <= 3)
   } catch (err) {
     fetchError = err instanceof Error ? err.message : String(err)
   }
@@ -123,7 +128,7 @@ export default async function QuestTopicPage({
               {/* Content */}
               <div className="flex-1 pl-2">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-semibold text-base leading-snug">{quest.title}</p>
+                  <p className="font-semibold text-base leading-snug">{quest.title ?? quest.module_title ?? quest.quest_id}</p>
                   {quest.completed && (
                     <span className="shrink-0 badge badge-success badge-sm gap-1 mt-0.5">
                       ✓ Done

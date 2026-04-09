@@ -2,14 +2,22 @@ import { redirect } from 'next/navigation'
 import { getTokenFromCookie } from '@/lib/cookies'
 import { wpFetch } from '@/lib/wp-api'
 import Breadcrumb from '@/components/child/Breadcrumb'
-import Image from 'next/image'
 import Link from 'next/link'
 import type { AuthUser } from '@/types/knowly'
 
-interface CatalogueEntry {
-  subject: string
+interface QuestEntry {
+  quest_id: string
+  module_title?: string
   topic?: string
-  topics_covered?: string[]
+  subject: string
+}
+
+const SUBJECT_SLUG: Record<string, string> = {
+  'Mathematics': 'math',
+  'English Language Arts': 'english',
+  'Language Arts': 'english',
+  'Science': 'science',
+  'Social Studies': 'social_studies',
 }
 
 function levelLabel(level: string) {
@@ -20,24 +28,6 @@ function periodLabel(period: string) {
   return map[period] ?? period
 }
 
-function getTopics(catalogue: CatalogueEntry[], subject: string): string[] {
-  const topics = new Set<string>()
-  catalogue
-    .filter((e) => e.subject === subject)
-    .forEach((e) => {
-      if (e.topic) topics.add(e.topic)
-      if (e.topics_covered) e.topics_covered.forEach((t) => topics.add(t))
-    })
-  return [...topics]
-}
-
-const FALLBACK_TOPICS: Record<string, string[]> = {
-  'Mathematics': ['Fractions', 'Decimals', 'Percentages', 'Geometry', 'Statistics'],
-  'English Language Arts': ['Comprehension', 'Grammar', 'Vocabulary', 'Writing', 'Poetry'],
-  'Science': ['Living Things', 'Forces & Motion', 'Matter', 'Earth & Space', 'Energy'],
-  'Social Studies': ['Our Community', 'Government', 'History', 'Geography', 'Culture'],
-}
-
 export default async function QuestSubjectPage({
   params,
 }: {
@@ -45,27 +35,42 @@ export default async function QuestSubjectPage({
 }) {
   const { subject: encodedSubject } = await params
   const subject = decodeURIComponent(encodedSubject)
+  const subjectSlug = SUBJECT_SLUG[subject] ?? subject.toLowerCase().replace(/\s+/g, '_')
 
   const token = await getTokenFromCookie()
   if (!token) redirect('/login')
 
-  let topics: string[] = FALLBACK_TOPICS[subject] ?? []
+  let topics: string[] = []
   let levelText = ''
+  let level = ''
+  let period = ''
 
   try {
     const user = await wpFetch<AuthUser>('/auth/me', 'GET', undefined, token)
     const activeChild = user.children?.find((c) => c.child_id === user.active_child_id) ?? user.children?.[0]
     if (activeChild) {
-      const level = activeChild.level
-      const period = activeChild.period
+      level = activeChild.level
+      period = activeChild.period
       levelText = period ? `${levelLabel(level)} | ${periodLabel(period)}` : levelLabel(level)
+    }
+  } catch {}
 
-      const data = await wpFetch<{ catalogue: CatalogueEntry[] }>(
-        `/exams?level=${level}&period=${period}&subject=${encodeURIComponent(subject)}`,
-        'GET', undefined, token
-      )
-      const fromApi = getTopics(data?.catalogue ?? [], subject)
-      if (fromApi.length > 0) topics = fromApi
+  // Fetch topics from the quest catalogue so they match what actually exists
+  try {
+    const qs = new URLSearchParams({ subject: subjectSlug })
+    if (level) qs.set('level', level)
+    if (period) qs.set('period', period)
+
+    const data = await wpFetch<{ quests: QuestEntry[] } | QuestEntry[]>(
+      `/quests?${qs}`, 'GET', undefined, token
+    )
+    const raw: QuestEntry[] = Array.isArray(data) ? data : (data as { quests: QuestEntry[] }).quests ?? []
+
+    // Extract unique module_title values as topics (preserving order)
+    const seen = new Set<string>()
+    for (const q of raw) {
+      const t = q.module_title ?? q.topic ?? ''
+      if (t && !seen.has(t)) { seen.add(t); topics.push(t) }
     }
   } catch {}
 
@@ -85,26 +90,34 @@ export default async function QuestSubjectPage({
         {levelText && <p className="text-base-content/60">{levelText}</p>}
       </div>
 
-      <p className="text-sm text-base-content/50">Select a topic to view quests</p>
-
-      <div className="flex flex-col gap-3">
-        {topics.map((topic) => (
-          <Link
-            key={topic}
-            href={`/child/quests/${encodedSubject}/${encodeURIComponent(topic)}`}
-            className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors group"
-          >
-            <div className="w-12 h-12 shrink-0 bg-primary/10 rounded-xl flex items-center justify-center">
-              <Image src="/icons/generic-icons.png" alt={topic} width={32} height={32} className="object-contain" />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold text-base">{topic}</p>
-              <p className="text-xs text-base-content/50">Tap to explore quests</p>
-            </div>
-            <span className="text-base-content/30 text-lg group-hover:text-base-content/60 transition-colors">›</span>
-          </Link>
-        ))}
-      </div>
+      {topics.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <div className="text-5xl">📚</div>
+          <p className="text-base-content/60 text-sm">No quests available for {subject} yet.<br />Check back soon!</p>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-base-content/50">Select a topic to view quests</p>
+          <div className="flex flex-col gap-3">
+            {topics.map((topic) => (
+              <Link
+                key={topic}
+                href={`/child/quests/${encodedSubject}/${encodeURIComponent(topic)}`}
+                className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors group"
+              >
+                <div className="w-12 h-12 shrink-0 bg-primary/10 rounded-xl flex items-center justify-center text-2xl">
+                  📖
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-base">{topic}</p>
+                  <p className="text-xs text-base-content/50">Tap to explore quests</p>
+                </div>
+                <span className="text-base-content/30 text-lg group-hover:text-base-content/60 transition-colors">›</span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

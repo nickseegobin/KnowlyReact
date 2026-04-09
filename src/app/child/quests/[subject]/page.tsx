@@ -10,6 +10,7 @@ interface QuestEntry {
   module_title?: string
   topic?: string
   subject: string
+  module_number?: number
 }
 
 const SUBJECT_SLUG: Record<string, string> = {
@@ -40,7 +41,7 @@ export default async function QuestSubjectPage({
   const token = await getTokenFromCookie()
   if (!token) redirect('/login')
 
-  let topics: string[] = []
+  let quests: QuestEntry[] = []
   let levelText = ''
   let level = ''
   let period = ''
@@ -55,7 +56,6 @@ export default async function QuestSubjectPage({
     }
   } catch {}
 
-  // Fetch topics from the quest catalogue so they match what actually exists
   try {
     const qs = new URLSearchParams({ subject: subjectSlug })
     if (level) qs.set('level', level)
@@ -66,11 +66,10 @@ export default async function QuestSubjectPage({
     )
     const raw: QuestEntry[] = Array.isArray(data) ? data : (data as { quests: QuestEntry[] }).quests ?? []
 
-    // Extract unique module_title values as topics (preserving order)
+    // Deduplicate by quest_id (catalogue may return one row per quest)
     const seen = new Set<string>()
     for (const q of raw) {
-      const t = q.module_title ?? q.topic ?? ''
-      if (t && !seen.has(t)) { seen.add(t); topics.push(t) }
+      if (!seen.has(q.quest_id)) { seen.add(q.quest_id); quests.push(q) }
     }
   } catch {}
 
@@ -90,31 +89,36 @@ export default async function QuestSubjectPage({
         {levelText && <p className="text-base-content/60">{levelText}</p>}
       </div>
 
-      {topics.length === 0 ? (
+      {quests.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <div className="text-5xl">📚</div>
           <p className="text-base-content/60 text-sm">No quests available for {subject} yet.<br />Check back soon!</p>
         </div>
       ) : (
         <>
-          <p className="text-sm text-base-content/50">Select a topic to view quests</p>
+          <p className="text-sm text-base-content/50">Select a topic to begin</p>
           <div className="flex flex-col gap-3">
-            {topics.map((topic) => (
-              <Link
-                key={topic}
-                href={`/child/quests/${encodedSubject}/${encodeURIComponent(topic)}`}
-                className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors group"
-              >
-                <div className="w-12 h-12 shrink-0 bg-primary/10 rounded-xl flex items-center justify-center text-2xl">
-                  📖
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold text-base">{topic}</p>
-                  <p className="text-xs text-base-content/50">Tap to explore quests</p>
-                </div>
-                <span className="text-base-content/30 text-lg group-hover:text-base-content/60 transition-colors">›</span>
-              </Link>
-            ))}
+            {quests.map((quest) => {
+              const topicLabel = quest.module_title ?? quest.topic ?? quest.quest_id
+              // Link directly to the quest detail — skip the intermediate topic list page
+              const href = `/child/quests/${encodedSubject}/${encodeURIComponent(topicLabel)}/${quest.quest_id}`
+              return (
+                <Link
+                  key={quest.quest_id}
+                  href={href}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors group"
+                >
+                  <div className="w-12 h-12 shrink-0 bg-primary/10 rounded-xl flex items-center justify-center text-2xl">
+                    📖
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-base">{topicLabel}</p>
+                    <p className="text-xs text-base-content/50">Tap to start quest</p>
+                  </div>
+                  <span className="text-base-content/30 text-lg group-hover:text-base-content/60 transition-colors">›</span>
+                </Link>
+              )
+            })}
           </div>
         </>
       )}

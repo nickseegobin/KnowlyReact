@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { AuthUser } from '@/types/knowly'
@@ -10,16 +10,38 @@ interface Props {
   children: React.ReactNode
   user: AuthUser
   blueGems: number
-  redGems: number
+  redGems?: number
 }
 
-const SUBJECTS = ['Mathematics', 'English Language Arts', 'Science', 'Social Studies']
-
-export default function ChildLayout({ children, user, blueGems, redGems }: Props) {
+export default function ChildLayout({ children, user, blueGems }: Props) {
   const router = useRouter()
+  const pathname = usePathname()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const avatarRef = useRef<HTMLDivElement>(null)
+
+  // Live gem balance — refreshes on visibility change and route change
+  const [liveBlue, setLiveBlue] = useState(blueGems)
+
+  const refreshGems = useCallback(async () => {
+    try {
+      const res = await fetch('/api/gems')
+      if (res.ok) {
+        const data = await res.json()
+        setLiveBlue(data.balance ?? data.blue_gem_balance ?? 0)
+      }
+    } catch { /* keep current value */ }
+  }, [])
+
+  useEffect(() => { refreshGems() }, [pathname, refreshGems])
+
+  useEffect(() => {
+    function onVisibility() {
+      if (document.visibilityState === 'visible') refreshGems()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [refreshGems])
 
   // Close avatar menu on outside click
   useEffect(() => {
@@ -96,11 +118,7 @@ export default function ChildLayout({ children, user, blueGems, redGems }: Props
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <Image src="/icons/blue-gem.png" alt="Blue gems" width={22} height={22} />
-              <span className="text-sm font-semibold">{blueGems}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Image src="/icons/red-gem.png" alt="Red gems" width={22} height={22} />
-              <span className="text-sm font-semibold">{redGems}</span>
+              <span className="text-sm font-semibold">{liveBlue}</span>
             </div>
 
             {/* Avatar with dropdown */}

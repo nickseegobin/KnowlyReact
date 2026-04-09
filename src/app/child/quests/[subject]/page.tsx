@@ -20,7 +20,6 @@ function periodLabel(period: string) {
   return map[period] ?? period
 }
 
-// Derive topics from catalogue entries for this subject
 function getTopics(catalogue: CatalogueEntry[], subject: string): string[] {
   const topics = new Set<string>()
   catalogue
@@ -32,7 +31,6 @@ function getTopics(catalogue: CatalogueEntry[], subject: string): string[] {
   return [...topics]
 }
 
-// Fallback topics per subject if API returns none
 const FALLBACK_TOPICS: Record<string, string[]> = {
   'Mathematics': ['Fractions', 'Decimals', 'Percentages', 'Geometry', 'Statistics'],
   'English Language Arts': ['Comprehension', 'Grammar', 'Vocabulary', 'Writing', 'Poetry'],
@@ -87,20 +85,24 @@ export default async function QuestSubjectPage({
         {levelText && <p className="text-base-content/60">{levelText}</p>}
       </div>
 
+      <p className="text-sm text-base-content/50">Select a topic to view quests</p>
+
       <div className="flex flex-col gap-3">
         {topics.map((topic) => (
-          <div
+          <Link
             key={topic}
-            className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors cursor-pointer"
+            href={`/child/quests/${encodedSubject}/${encodeURIComponent(topic)}`}
+            className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors group"
           >
-            <div className="w-12 h-12 shrink-0">
-              <Image src="/icons/generic-icons.png" alt={topic} width={48} height={48} className="object-contain w-full h-full" />
+            <div className="w-12 h-12 shrink-0 bg-primary/10 rounded-xl flex items-center justify-center">
+              <Image src="/icons/generic-icons.png" alt={topic} width={32} height={32} className="object-contain" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="font-semibold text-base">{topic}</p>
-              <p className="text-xs text-base-content/60">Curriculum-aligned learning module</p>
+              <p className="text-xs text-base-content/50">Tap to explore quests</p>
             </div>
-          </div>
+            <span className="text-base-content/30 text-lg group-hover:text-base-content/60 transition-colors">›</span>
+          </Link>
         ))}
       </div>
     </div>

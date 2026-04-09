@@ -7,7 +7,8 @@ import Breadcrumb from '@/components/child/Breadcrumb'
 
 interface Question {
   question_id: string
-  question_text: string
+  question_text?: string   // API docs field
+  question?: string        // Railway actual field name
   options: Record<string, string>
   meta: { topic: string; subtopic?: string; cognitive_level: string }
 }
@@ -189,9 +190,9 @@ export default function TrialPage({
 
   return (
     <div className="flex flex-col gap-4 pb-4">
-      {/* Question text */}
-      <div className="pt-2">
-        <p className="text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: currentQ.question_text }} />
+      {/* Question text — Railway sends 'question' field, docs say 'question_text' */}
+      <div className="pt-2 text-base leading-relaxed">
+        <p>{currentQ.question ?? currentQ.question_text ?? ''}</p>
       </div>
 
       {/* Answer options */}

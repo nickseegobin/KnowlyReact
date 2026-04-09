@@ -7,11 +7,11 @@ import type { AuthUser } from '@/types/knowly'
 async function getChildData(token: string) {
   const [user, gems] = await Promise.allSettled([
     wpFetch<AuthUser>('/auth/me', 'GET', undefined, token),
-    wpFetch<{ blue_gem_balance: number; red_gem_balance: number }>('/gems/balance', 'GET', undefined, token),
+    wpFetch<{ balance: number }>('/gems/balance', 'GET', undefined, token),
   ])
 
   const userData = user.status === 'fulfilled' ? user.value : null
-  const gemData = gems.status === 'fulfilled' ? gems.value : { blue_gem_balance: 0, red_gem_balance: 0 }
+  const gemData = gems.status === 'fulfilled' ? gems.value : { balance: 0 }
 
   return { userData, gemData }
 }
@@ -33,8 +33,8 @@ export default async function ChildAppLayout({
   return (
     <ChildLayout
       user={userData as AuthUser}
-      blueGems={gemData?.blue_gem_balance ?? 0}
-      redGems={gemData?.red_gem_balance ?? 0}
+      blueGems={gemData?.balance ?? 0}
+      redGems={0}
     >
       {children}
     </ChildLayout>

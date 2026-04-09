@@ -78,6 +78,11 @@ export default async function QuestTopicPage({
     fetchError = err instanceof Error ? err.message : String(err)
   }
 
+  // If exactly one quest matches this topic, go straight to it — no list needed
+  if (quests.length === 1) {
+    redirect(`/child/quests/${encodedSubject}/${encodedTopic}/${quests[0].quest_id}`)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}

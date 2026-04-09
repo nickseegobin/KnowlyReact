@@ -73,7 +73,7 @@ export default async function QuestTopicPage({
     )
     const raw = Array.isArray(data) ? data : (data as { quests: Quest[] }).quests ?? []
     // Filter to quests whose module_title (or topic) matches the clicked topic
-    quests = raw.filter((q) => (q.module_title ?? q.topic ?? '') === topic || raw.length <= 3)
+    quests = raw.filter((q) => (q.module_title ?? q.topic ?? '') === topic)
   } catch (err) {
     fetchError = err instanceof Error ? err.message : String(err)
   }

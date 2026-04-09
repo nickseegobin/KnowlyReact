@@ -81,7 +81,7 @@ export default function QuestDetailPage({
       const res = await fetch('/api/quests/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quest_id: quest.quest_id, source: 'child_app' }),
+        body: JSON.stringify({ quest_id: quest.quest_id, source: 'direct' }),
       })
       if (!res.ok) {
         const err = await res.json()

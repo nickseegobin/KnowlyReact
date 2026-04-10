@@ -69,7 +69,7 @@ export default function ResultsPage({
     )
   }
 
-  const pct = Math.round(result.percentage)
+  const pct = Math.round(result.percentage ?? 0)
   // Circle progress — circumference of r=40 circle
   const r = 40
   const circ = 2 * Math.PI * r
@@ -162,7 +162,7 @@ export default function ResultsPage({
           </div>
           <div className="flex flex-col gap-3">
             {result.topic_breakdown.map((t) => {
-              const tpct = Math.round(t.percentage)
+              const tpct = Math.round(t.percentage ?? (t.total ? (t.correct / t.total) * 100 : 0))
               const needsWork = tpct < 60
               return (
                 <div key={t.topic}>

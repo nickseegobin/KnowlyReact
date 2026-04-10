@@ -20,7 +20,8 @@ interface ExamPackage {
 }
 
 interface Session {
-  session_id: number
+  session_id: number | string
+  external_session_id?: string
   balance_after: number
   package: ExamPackage
 }

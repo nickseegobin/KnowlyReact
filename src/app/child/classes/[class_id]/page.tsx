@@ -43,9 +43,6 @@ function levelLabel(level?: string) {
   return level === 'std_4' ? 'Standard 4' : level === 'std_5' ? 'Standard 5' : level
 }
 
-function taskTypeIcon(_type: string) {
-  return '/icons/generic-icons.png'
-}
 
 export default async function ClassDetailPage({
   params,
@@ -116,7 +113,8 @@ export default async function ClassDetailPage({
                   className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 opacity-60 cursor-default"
                 >
                   <div className="w-10 h-10 shrink-0 relative">
-                    <Image src={taskTypeIcon(task.type)} alt="Trial" width={40} height={40} className="object-contain w-full h-full" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/icons/generic-icons.png" alt="" className="w-10 h-10 object-contain" />
                   </div>
                   <div className="flex-1 flex flex-col gap-0.5">
                     <p className="font-semibold text-sm line-through">{task.title}</p>
@@ -136,7 +134,8 @@ export default async function ClassDetailPage({
                   className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors"
                 >
                   <div className="w-10 h-10 shrink-0">
-                    <Image src={taskTypeIcon(task.type)} alt="Trial" width={40} height={40} className="object-contain w-full h-full" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/icons/generic-icons.png" alt="" className="w-10 h-10 object-contain" />
                   </div>
                   <div className="flex-1 flex flex-col gap-0.5">
                     <p className="font-semibold text-sm">{task.title}</p>
@@ -178,7 +177,8 @@ export default async function ClassDetailPage({
                   className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 opacity-60 cursor-default"
                 >
                   <div className="w-10 h-10 shrink-0">
-                    <Image src={taskTypeIcon(task.type)} alt="Quest" width={40} height={40} className="object-contain w-full h-full" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/icons/generic-icons.png" alt="" className="w-10 h-10 object-contain" />
                   </div>
                   <div className="flex-1 flex flex-col gap-0.5">
                     <p className="font-semibold text-sm line-through">{task.title}</p>
@@ -195,7 +195,8 @@ export default async function ClassDetailPage({
                   className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors"
                 >
                   <div className="w-10 h-10 shrink-0">
-                    <Image src={taskTypeIcon(task.type)} alt="Quest" width={40} height={40} className="object-contain w-full h-full" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/icons/generic-icons.png" alt="" className="w-10 h-10 object-contain" />
                   </div>
                   <div className="flex-1 flex flex-col gap-0.5">
                     <p className="font-semibold text-sm">{task.title}</p>

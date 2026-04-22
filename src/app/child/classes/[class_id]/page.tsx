@@ -43,8 +43,8 @@ function levelLabel(level?: string) {
   return level === 'std_4' ? 'Standard 4' : level === 'std_5' ? 'Standard 5' : level
 }
 
-function taskTypeIcon(type: string) {
-  return type === 'quest' ? '/icons/quest-icon.png' : '/icons/trial-icon.png'
+function taskTypeIcon(_type: string) {
+  return '/icons/generic-icons.png'
 }
 
 export default async function ClassDetailPage({

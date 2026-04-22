@@ -137,7 +137,7 @@ export default function ClassTrialResultsPage({
         <div className="card bg-base-200 rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="font-bold italic">Leaderboard</p>
-            <Link href="/leaderboard" className="text-xs text-primary">Full Leaderboard ›</Link>
+            <Link href="/child/leaderboard" className="text-xs text-primary">Full Leaderboard ›</Link>
           </div>
           <div className="flex items-center gap-3">
             <Image src="/icons/thumbs.png" alt="Thumbs up" width={40} height={40} className="object-contain" />

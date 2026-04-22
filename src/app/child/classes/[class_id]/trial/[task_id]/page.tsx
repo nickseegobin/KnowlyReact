@@ -48,6 +48,7 @@ export default function ClassTrialPage({
   const [session, setSession] = useState<Session | null>(null)
   const [currentIdx, setCurrentIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [timings, setTimings] = useState<Record<string, number>>({})
   const [selected, setSelected] = useState<string | null>(null)
   const [timeLeft, setTimeLeft] = useState(TIME_PER_Q)
   const [error, setError] = useState('')
@@ -85,22 +86,27 @@ export default function ClassTrialPage({
     }
   }
 
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback((overrideAnswer?: string) => {
     if (!currentQ) return
-    const ans = selected ?? ''
+    const ans = overrideAnswer !== undefined ? overrideAnswer : (selected ?? '')
+    const spent = TIME_PER_Q - timeLeft
     setAnswers((prev) => ({ ...prev, [currentQ.question_id]: ans }))
+    setTimings((prev) => ({ ...prev, [currentQ.question_id]: spent }))
     setSelected(null)
     setTimeLeft(TIME_PER_Q)
 
     if (currentIdx + 1 < total) {
       setCurrentIdx((i) => i + 1)
     } else {
-      submitExam({ ...answers, [currentQ.question_id]: ans })
+      submitExam(
+        { ...answers, [currentQ.question_id]: ans },
+        { ...timings, [currentQ.question_id]: spent }
+      )
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentIdx, total, selected, currentQ, answers])
+  }, [currentIdx, total, selected, currentQ, answers, timings, timeLeft])
 
-  async function submitExam(finalAnswers: Record<string, string>) {
+  async function submitExam(finalAnswers: Record<string, string>, finalTimings: Record<string, number> = {}) {
     if (!session) return
     setPhase('submitting')
 
@@ -112,6 +118,7 @@ export default function ClassTrialPage({
       topic: q.meta.topic,
       subtopic: q.meta.subtopic ?? '',
       cognitive_level: q.meta.cognitive_level,
+      time_taken_seconds: finalTimings[q.question_id] ?? 0,
     }))
 
     try {
@@ -214,7 +221,7 @@ export default function ClassTrialPage({
             onClick={() => {
               if (selected) return
               setSelected(key)
-              setTimeout(handleNext, 600)
+              setTimeout(() => handleNext(key), 600)
             }}
             className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-colors ${
               selected === key
@@ -239,7 +246,7 @@ export default function ClassTrialPage({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-base-content/50">Q {currentIdx + 1}/{total}</span>
-            <button onClick={handleNext} className="btn btn-ghost btn-sm">
+            <button onClick={() => handleNext()} className="btn btn-ghost btn-sm">
               {currentIdx + 1 === total ? 'Finish' : 'Skip ›'}
             </button>
           </div>

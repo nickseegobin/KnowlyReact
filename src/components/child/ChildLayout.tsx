@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { AuthUser } from '@/types/knowly'
+import { useUnreadCount } from '@/hooks/useUnreadCount'
 
 interface Props {
   children: React.ReactNode
@@ -19,6 +20,7 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const avatarRef = useRef<HTMLDivElement>(null)
+  const { unread, refresh: refreshCount } = useUnreadCount()
 
   // Live gem balance — refreshes on visibility change and route change
   const [liveBlue, setLiveBlue] = useState(blueGems)
@@ -85,7 +87,7 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
       >
         <div className="p-6 flex-1 flex flex-col gap-2 pt-12">
           <Link href="/child/home" className="text-lg py-2" onClick={() => setDrawerOpen(false)}>Home</Link>
-          <Link href="/leaderboard" className="text-lg py-2 text-base-content/50" onClick={() => setDrawerOpen(false)}>Leaderboards</Link>
+          <Link href="/child/leaderboard" className="text-lg py-2" onClick={() => setDrawerOpen(false)}>Leaderboards</Link>
           <Link href="/my-progress" className="text-lg py-2 text-base-content/50" onClick={() => setDrawerOpen(false)}>My Progress</Link>
           <Link href="/news" className="text-lg py-2 text-base-content/50" onClick={() => setDrawerOpen(false)}>News</Link>
         </div>
@@ -125,7 +127,7 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
             <div className="relative" ref={avatarRef}>
               <button
                 onClick={() => setAvatarMenuOpen((o) => !o)}
-                className="w-9 h-9 rounded-full overflow-hidden border-2 border-base-300 focus:outline-none"
+                className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-base-300 focus:outline-none"
               >
                 <Image
                   src={`/avatars/children/avatar-${avatarIndex}.png`}
@@ -134,6 +136,11 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
                   height={36}
                   className="object-cover w-full h-full"
                 />
+                {unread > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-error rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                )}
               </button>
 
               {avatarMenuOpen && (
@@ -143,10 +150,23 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
                     {nickname && <p className="text-xs text-base-content/50">@{nickname}</p>}
                   </div>
                   <div className="flex flex-col py-1">
-                    <span className="px-4 py-2 text-sm text-base-content/40 cursor-not-allowed">Notifications</span>
-                    <span className="px-4 py-2 text-sm text-base-content/40 cursor-not-allowed">My Settings</span>
-                    <span className="px-4 py-2 text-sm text-base-content/40 cursor-not-allowed">Content Settings</span>
-                    <span className="px-4 py-2 text-sm text-base-content/40 cursor-not-allowed">Leaderboards</span>
+                    <Link
+                      href="/child/notifications"
+                      className="px-4 py-2 text-sm hover:bg-base-200 flex items-center justify-between"
+                      onClick={() => { setAvatarMenuOpen(false); refreshCount() }}
+                    >
+                      Notifications
+                      {unread > 0 && (
+                        <span className="badge badge-sm badge-error">{unread > 9 ? '9+' : unread}</span>
+                      )}
+                    </Link>
+                    <Link href="/child/settings" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>
+                      My Settings
+                    </Link>
+                    <Link href="/child/settings/content" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>
+                      Content Settings
+                    </Link>
+                    <Link href="/child/leaderboard" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>Leaderboards</Link>
                   </div>
                   <div className="border-t border-base-200 flex flex-col py-1">
                     <Link href="/profiles" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>

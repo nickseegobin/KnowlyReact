@@ -5,7 +5,7 @@ const HOME_ITEMS = [
   { label: 'Quests', href: '/child/quests', desc: 'Structured learning modules aligned to your curriculum.' },
   { label: 'Trials', href: '/child/trials', desc: 'Practice exams to test your knowledge and earn gems.' },
   { label: 'Classes', href: '/child/classes', desc: 'View classes assigned by your teacher.' },
-  { label: 'Leaderboard', href: '/leaderboard', desc: 'See how you rank against other students today.' },
+  { label: 'Leaderboard', href: '/child/leaderboard', desc: 'See how you rank against other students today.' },
   { label: 'Progress', href: '/my-progress', desc: 'Track your improvement across all subjects.' },
   { label: 'Badges', href: '/badges', desc: 'Earn badges by completing Quests for the first time.' },
   { label: 'News', href: '/news', desc: 'Platform updates and announcements.' },

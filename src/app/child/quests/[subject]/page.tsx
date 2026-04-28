@@ -46,6 +46,7 @@ export default async function QuestSubjectPage({
   let levelText = ''
   let level = ''
   let period = ''
+  let fetchError: string | null = null
 
   try {
     const user = await wpFetch<AuthUser>('/auth/me', 'GET', undefined, token)
@@ -55,26 +56,35 @@ export default async function QuestSubjectPage({
       period = activeChild.period
       levelText = period ? `${levelLabel(level)} | ${periodLabel(period)}` : levelLabel(level)
     }
-  } catch {}
+  } catch (err) {
+    console.error('[QuestSubjectPage] /auth/me failed:', err)
+  }
 
   try {
     const qs = new URLSearchParams({ subject: subjectSlug })
     if (level) qs.set('level', level)
     if (period) qs.set('period', period)
 
+    console.log('[QuestSubjectPage] fetching /quests?' + qs.toString())
     const data = await wpFetch<{ quests: QuestEntry[] } | QuestEntry[]>(
       `/quests?${qs}`, 'GET', undefined, token
     )
+    console.log('[QuestSubjectPage] raw response:', JSON.stringify(data))
     const raw: QuestEntry[] = Array.isArray(data) ? data : (data as { quests: QuestEntry[] }).quests ?? []
+    console.log('[QuestSubjectPage] quests count:', raw.length)
 
-    // Build topic → first quest_id map (one card per topic)
+    // Build topic → first quest_id map (one card per topic), filtered to this subject
     for (const q of raw) {
+      if (q.subject && q.subject !== subjectSlug) continue
       const label = q.module_title ?? q.topic ?? q.quest_id
       if (label && q.quest_id && !topicMap.has(label)) {
         topicMap.set(label, q.quest_id)
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('[QuestSubjectPage] /quests fetch failed:', err)
+    fetchError = err instanceof Error ? err.message : 'Failed to load quests'
+  }
 
   const topics = Array.from(topicMap.entries()) // [ [label, quest_id], ... ]
 
@@ -97,7 +107,11 @@ export default async function QuestSubjectPage({
       {topics.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <div className="text-5xl">📚</div>
-          <p className="text-base-content/60 text-sm">No quests available for {subject} yet.<br />Check back soon!</p>
+          {fetchError ? (
+            <p className="text-error text-sm">Could not load quests: {fetchError}</p>
+          ) : (
+            <p className="text-base-content/60 text-sm">No quests available for {subject} yet.<br />Check back soon!</p>
+          )}
         </div>
       ) : (
         <>

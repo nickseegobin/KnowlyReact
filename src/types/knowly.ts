@@ -32,6 +32,8 @@ export interface TeacherProfile {
   school_name: string
   class_name: string
   phone: string
+  principal_name?: string
+  principal_contact?: string
   red_gem_balance: number
   red_gem_stipend: number
 }
@@ -118,6 +120,23 @@ export interface WPError {
   code: string
   message: string
   data?: { status: number; [key: string]: unknown }
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export interface KnowlyNotification {
+  id: number
+  recipient_user_id: number
+  sender_user_id: number | null
+  type: 'simple' | 'confirmation'
+  subject: string
+  message: string
+  /** Free-form JSON payload — e.g. class_invitation carries class_id, class_name, child_id, teacher_name, school_name */
+  payload: Record<string, unknown> | null
+  response: 'accepted' | 'declined' | null
+  is_read: boolean
+  responded_at: string | null
+  created_at: string
 }
 
 // ── Curriculum constants ──────────────────────────────────────────────────────

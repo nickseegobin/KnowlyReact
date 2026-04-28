@@ -1,11 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 export default function LoginPage() {
-  const router = useRouter()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const nextPath     = searchParams.get('next')
+
   const [form, setForm] = useState({ username: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,10 +32,16 @@ export default function LoginPage() {
         return
       }
 
+      // If the middleware bounced us here from a protected page, go back there
+      if (nextPath) {
+        router.push(nextPath)
+        return
+      }
+
       // Route by role
       if (data.role === 'teacher') {
         router.push(
-          data.approval_status === 'approved' ? '/teacher-profile' : '/waiting-approval'
+          data.approval_status === 'approved' ? '/teacher/home' : '/waiting-approval'
         )
       } else {
         router.push('/profiles')

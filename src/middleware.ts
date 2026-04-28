@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { TOKEN_COOKIE } from '@/lib/cookies'
 
 // Routes that require a valid session
-const PROTECTED = ['/profiles', '/dashboard', '/parent-profile', '/child-profile', '/teacher-profile', '/register/pin', '/register/add-child', '/register/verify-pin', '/child']
+const PROTECTED = ['/profiles', '/dashboard', '/parent-profile', '/child-profile', '/teacher-profile', '/teacher', '/register/pin', '/register/add-child', '/register/verify-pin', '/child']
 // Note: /waiting-approval and /register/pending are intentionally NOT protected — teachers land here with no JWT after registration
 
 // Routes that should redirect to /profiles if already logged in (exact match only)
@@ -17,8 +17,10 @@ export function middleware(req: NextRequest) {
 
   if (isProtected && !token) {
     const url = req.nextUrl.clone()
+    const fullPath = pathname + req.nextUrl.search
     url.pathname = '/login'
-    url.searchParams.set('next', pathname)
+    url.search = ''
+    url.searchParams.set('next', fullPath)
     return NextResponse.redirect(url)
   }
 

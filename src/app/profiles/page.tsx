@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import type { AuthUser, ChildProfile } from '@/types/knowly'
 
-const MAX_CHILDREN = 3
+const MAX_CHILDREN = 4
 
 export default function ProfilesPage() {
   const router = useRouter()

@@ -6,8 +6,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 interface ClassEntry {
-  class_id: number
-  class_name: string
+  id: number
+  name: string
   teacher_name?: string
   school_name?: string
   level?: string
@@ -64,20 +64,23 @@ export default async function ClassesPage() {
             const badge = [levelStr, periodStr].filter(Boolean).join(' | ')
 
             return (
-              <div
-                key={cls.class_id}
-                className="flex items-start gap-4 p-4 rounded-2xl bg-base-200"
+              <Link
+                key={cls.id}
+                href={`/child/classes/${cls.id}`}
+                className="flex items-start gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors"
               >
                 <div className="w-12 h-12 shrink-0 mt-1">
-                  <Image src="/icons/generic-icons.png" alt={cls.class_name} width={48} height={48} className="object-contain w-full h-full" />
+                  <Image src="/icons/generic-icons.png" alt={cls.name} width={48} height={48} className="object-contain w-full h-full" />
                 </div>
-                <div className="flex flex-col gap-0.5">
-                  <p className="font-semibold text-base">{cls.teacher_name ?? 'Teacher'}</p>
-                  {cls.school_name && <p className="text-sm text-base-content/60">{cls.school_name}</p>}
+                <div className="flex flex-col gap-0.5 flex-1">
+                  <p className="font-semibold text-base">{cls.name}</p>
+                  <p className="text-sm text-base-content/60">{cls.teacher_name ?? 'Teacher'}</p>
+                  {cls.school_name && <p className="text-xs text-base-content/50">{cls.school_name}</p>}
                   {badge && <p className="text-xs font-semibold">{badge}</p>}
                   {cls.description && <p className="text-xs text-base-content/50 mt-1 leading-snug">{cls.description}</p>}
                 </div>
-              </div>
+                <span className="text-base-content/30 self-center text-lg">›</span>
+              </Link>
             )
           })}
         </div>

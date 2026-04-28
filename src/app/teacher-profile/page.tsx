@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import type { TeacherProfile, ClassEntry } from '@/types/knowly'
 import { LEVELS } from '@/types/knowly'
+import TeacherLayout from '@/components/teacher/TeacherLayout'
 
 export default function TeacherProfilePage() {
   const router = useRouter()
@@ -47,11 +48,6 @@ export default function TeacherProfilePage() {
 
     fetchClasses()
   }, [router, fetchClasses])
-
-  async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.push('/')
-  }
 
   async function createClass() {
     if (!newClassName.trim()) { setCreateError('Class name is required.'); return }
@@ -120,29 +116,7 @@ export default function TeacherProfilePage() {
   const avatarIndex = user.avatar_index ?? 1
 
   return (
-    <main className="min-h-screen bg-base-100 flex flex-col">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 bg-base-100 border-b border-base-200 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-base-300">
-            <Image
-              src={`/avatars/adults/avatar-${avatarIndex}.png`}
-              alt={user.display_name}
-              width={32}
-              height={32}
-              className="object-cover w-full h-full"
-            />
-          </div>
-          <span className="font-semibold text-sm">{user.display_name}</span>
-        </div>
-
-        {/* Red gem wallet */}
-        <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 rounded-full px-3 py-1">
-          <Image src="/icons/red-gem.png" alt="Red gems" width={18} height={18} />
-          <span className="font-bold text-red-600 text-sm">{user.red_gem_balance}</span>
-        </div>
-      </header>
-
+    <TeacherLayout user={user}>
       <div className="flex-1 overflow-y-auto px-4 py-6 max-w-sm mx-auto w-full flex flex-col gap-8">
         {/* ── Avatar + name ───────────────────────────────────────────────── */}
         <div className="flex flex-col items-center gap-3">
@@ -270,16 +244,7 @@ export default function TeacherProfilePage() {
           )}
         </section>
 
-        {/* ── Actions ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={handleLogout}
-            className="btn btn-neutral btn-lg w-full"
-          >
-            Logout
-          </button>
-        </div>
       </div>
-    </main>
+    </TeacherLayout>
   )
 }

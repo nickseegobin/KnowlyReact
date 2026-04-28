@@ -1,6 +1,8 @@
 /**
  * Server-side cookie helpers.
- * JWT is stored in an HttpOnly, Secure, SameSite=Strict cookie.
+ * JWT is stored in an HttpOnly, Secure, SameSite=Lax cookie.
+ * Lax (not Strict) is required so the cookie is sent after cross-site top-level
+ * navigations — e.g. returning from a payment gateway on a different domain.
  * The client never has direct access to the token.
  */
 
@@ -19,7 +21,7 @@ export function setTokenCookie(res: ResponseCookies, token: string): void {
   res.set(TOKEN_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     path: '/',
     maxAge: TOKEN_TTL_SECONDS,
   })
@@ -29,7 +31,7 @@ export function clearTokenCookie(res: ResponseCookies): void {
   res.set(TOKEN_COOKIE, '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     path: '/',
     maxAge: 0,
   })

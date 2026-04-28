@@ -1,18 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { wpFetch, WPApiError } from '@/lib/wp-api'
 import { getTokenFromCookie } from '@/lib/cookies'
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const token = await getTokenFromCookie()
     if (!token) return NextResponse.json({ message: 'Unauthenticated' }, { status: 401 })
-
-    const scope = req.nextUrl.searchParams.get('scope')
-    const path  = scope ? `/gems/balance?scope=${encodeURIComponent(scope)}` : '/gems/balance'
-    const data  = await wpFetch(path, 'GET', undefined, token)
+    const data = await wpFetch('/exams/active', 'GET', undefined, token)
     return NextResponse.json(data)
   } catch (err) {
     if (err instanceof WPApiError) return NextResponse.json({ message: err.message, code: err.code }, { status: err.status })
-    return NextResponse.json({ message: 'Failed to fetch gem balance' }, { status: 500 })
+    return NextResponse.json({ message: 'Failed to fetch active session' }, { status: 500 })
   }
 }

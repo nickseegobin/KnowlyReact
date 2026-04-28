@@ -23,10 +23,12 @@ interface WorkedExample {
 }
 
 interface Section {
-  section_number: number
+  section_id?: string       // WP store format: "s_001"
+  section_number?: number   // Railway format: 1, 2, 3
   title: string
-  explanation: string[]
-  knowledge_check: KnowledgeCheck[]
+  content?: string          // simple string — normalized to explanation[] on load
+  explanation?: string[]
+  knowledge_check?: KnowledgeCheck[]
   worked_examples?: WorkedExample[]
   objectives_covered?: string[]
 }
@@ -110,7 +112,14 @@ export default function QuestDetailPage({
         const data: QuestData = await res.json()
         setQuest(data)
         // content may be nested under .content or top-level .sections
-        const s = data.content?.sections ?? data.sections ?? []
+        const raw = data.content?.sections ?? data.sections ?? []
+        // Normalize: coerce content string → explanation array so the rest of
+        // the component always has a consistent shape regardless of source format.
+        const s = raw.map((sec) => ({
+          ...sec,
+          explanation: sec.explanation ?? (sec.content ? [sec.content] : []),
+          knowledge_check: sec.knowledge_check ?? [],
+        }))
         setSections(s)
         setPhase('confirm')
       } catch (e) {
@@ -142,6 +151,9 @@ export default function QuestDetailPage({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message ?? 'Failed to start quest')
+      if (typeof data.balance_after === 'number') {
+        window.dispatchEvent(new CustomEvent('knowly:gem-update', { detail: { balance: data.balance_after } }))
+      }
       setSessionId(data.session_id)
       setSectionIdx(0)
       setParaIdx(0)
@@ -158,11 +170,24 @@ export default function QuestDetailPage({
     if (!isLastPara) {
       setParaIdx((p) => p + 1)
     } else {
-      // Move to quiz for this section
-      setCheckIdx(0)
-      setSelected(null)
-      setIsCorrect(null)
-      setPhase('quiz')
+      const checks = currentSection?.knowledge_check ?? []
+      if (checks.length > 0) {
+        // Move to quiz for this section
+        setCheckIdx(0)
+        setSelected(null)
+        setIsCorrect(null)
+        setPhase('quiz')
+      } else {
+        // No knowledge checks — advance directly to next section or complete
+        if (sectionIdx + 1 < sections.length) {
+          setSectionIdx((i) => i + 1)
+          setParaIdx(0)
+          setCheckIdx(0)
+          setPhase('lesson')
+        } else {
+          wrongPool.length > 0 ? setPhase('review') : completeQuest()
+        }
+      }
     }
   }
 
@@ -329,10 +354,10 @@ export default function QuestDetailPage({
         {/* Sections list */}
         {sections.length > 0 && (
           <div className="flex flex-col gap-2">
-            {sections.map((s) => (
-              <div key={s.section_number} className="flex items-center gap-3 p-3 rounded-xl bg-base-200">
+            {sections.map((s, i) => (
+              <div key={s.section_id ?? s.section_number ?? i} className="flex items-center gap-3 p-3 rounded-xl bg-base-200">
                 <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                  {s.section_number}
+                  {s.section_number ?? i + 1}
                 </div>
                 <p className="text-sm font-medium">{s.title}</p>
               </div>
@@ -345,7 +370,7 @@ export default function QuestDetailPage({
         <div className="sticky bottom-0 bg-base-100 pt-3 pb-2 -mx-4 px-4 border-t border-base-200">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-xl">💎</span>
-            <p className="text-sm font-semibold">{quest?.gem_cost ?? 3} Blue Gems to start</p>
+            <p className="text-sm font-semibold">{quest?.gem_cost ?? '…'} Blue Gem{quest?.gem_cost !== 1 ? 's' : ''} to start</p>
           </div>
           <button className="btn btn-primary w-full" onClick={startQuest}>
             ▶ Start Quest
@@ -370,7 +395,7 @@ export default function QuestDetailPage({
         {/* Section label */}
         <div>
           <p className="text-xs text-base-content/40 uppercase tracking-wide font-medium">
-            Section {currentSection?.section_number} of {totalSections}
+            Section {currentSection?.section_number ?? (sectionIdx + 1)} of {totalSections}
           </p>
           <h2 className="text-xl font-bold mt-0.5">{currentSection?.title}</h2>
         </div>
@@ -378,9 +403,9 @@ export default function QuestDetailPage({
         {/* Explanation paragraph */}
         <div className="flex-1 rounded-2xl bg-base-200 p-5">
           <p className="text-base leading-relaxed text-base-content">{currentPara}</p>
-          {currentSection?.explanation.length > 1 && (
+          {(currentSection?.explanation?.length ?? 0) > 1 && (
             <p className="text-xs text-base-content/40 mt-4 text-right">
-              {paraIdx + 1} / {currentSection.explanation.length}
+              {paraIdx + 1} / {currentSection?.explanation?.length}
             </p>
           )}
         </div>

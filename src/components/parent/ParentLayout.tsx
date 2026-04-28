@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -11,28 +11,32 @@ interface Props {
   children: React.ReactNode
   user: AuthUser
   blueGems: number
-  redGems?: number
 }
 
-export default function ChildLayout({ children, user, blueGems }: Props) {
-  const router = useRouter()
+const TABS = [
+  { label: 'Home',      href: '/parent-profile' },
+  { label: 'Gems',      href: '/parent-profile/gems' },
+  { label: 'Analytics', href: '/parent-profile/analytics' },
+]
+
+export default function ParentLayout({ children, user, blueGems }: Props) {
+  const router   = useRouter()
   const pathname = usePathname()
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerOpen,    setDrawerOpen]    = useState(false)
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const avatarRef = useRef<HTMLDivElement>(null)
   const { unread, refresh: refreshCount } = useUnreadCount()
 
-  // Live gem balance — refreshes on visibility change and route change
   const [liveBlue, setLiveBlue] = useState(blueGems)
 
   const refreshGems = useCallback(async () => {
     try {
-      const res = await fetch('/api/gems')
+      const res = await fetch('/api/gems?scope=parent')
       if (res.ok) {
-        const data = await res.json()
-        setLiveBlue(data.balance ?? data.blue_gem_balance ?? 0)
+        const d = await res.json()
+        setLiveBlue(d.balance ?? d.blue_gem_balance ?? 0)
       }
-    } catch { /* keep current value */ }
+    } catch { /* keep current */ }
   }, [])
 
   useEffect(() => { refreshGems() }, [pathname, refreshGems])
@@ -54,24 +58,15 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
     return () => window.removeEventListener('knowly:gem-update', onGemUpdate)
   }, [])
 
-  // Close avatar menu on outside click
   useEffect(() => {
-    function handler(e: MouseEvent) {
+    function onOutsideClick(e: MouseEvent) {
       if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
         setAvatarMenuOpen(false)
       }
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('mousedown', onOutsideClick)
+    return () => document.removeEventListener('mousedown', onOutsideClick)
   }, [])
-
-  const activeChild = user.children?.find(
-    (c) => c.child_id === user.active_child_id
-  ) ?? user.children?.[0]
-
-  const avatarIndex = activeChild?.avatar_index ?? 1
-  const displayName = activeChild?.display_name ?? user.display_name
-  const nickname = activeChild?.nickname ?? ''
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -80,12 +75,10 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col bg-base-100">
+
       {/* ── Drawer overlay ── */}
       {drawerOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/30"
-          onClick={() => setDrawerOpen(false)}
-        />
+        <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setDrawerOpen(false)} />
       )}
 
       {/* ── Slide-in drawer ── */}
@@ -95,10 +88,14 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
         }`}
       >
         <div className="p-6 flex-1 flex flex-col gap-2 pt-12">
-          <Link href="/child/home" className="text-lg py-2" onClick={() => setDrawerOpen(false)}>Home</Link>
-          <Link href="/child/leaderboard" className="text-lg py-2" onClick={() => setDrawerOpen(false)}>Leaderboards</Link>
-          <Link href="/my-progress" className="text-lg py-2 text-base-content/50" onClick={() => setDrawerOpen(false)}>My Progress</Link>
-          <Link href="/news" className="text-lg py-2 text-base-content/50" onClick={() => setDrawerOpen(false)}>News</Link>
+          {TABS.map(({ label, href }) => (
+            <Link key={label} href={href} className="text-lg py-2" onClick={() => setDrawerOpen(false)}>
+              {label}
+            </Link>
+          ))}
+          <Link href="/register/add-child" className="text-lg py-2" onClick={() => setDrawerOpen(false)}>
+            Add Child
+          </Link>
         </div>
         <div className="p-6 border-t border-base-200 flex flex-col gap-2">
           <Link href="/profiles" className="text-lg py-2" onClick={() => setDrawerOpen(false)}>Switch Profile</Link>
@@ -109,7 +106,7 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
       {/* ── Top navbar ── */}
       <header className="sticky top-0 z-30 bg-base-100 border-b border-base-200">
         <div className="flex items-center justify-between px-4 h-14">
-          {/* Hamburger + Logo */}
+
           <div className="flex items-center gap-3">
             <button
               onClick={() => setDrawerOpen(true)}
@@ -125,11 +122,11 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
             <span className="font-bold text-lg">Knowley</span>
           </div>
 
-          {/* Gem balances + avatar */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <Image src="/icons/blue-gem.png" alt="Blue gems" width={22} height={22} />
-              <span className="text-sm font-semibold">{liveBlue}</span>
+            {/* Blue gem wallet */}
+            <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+              <Image src="/icons/blue-gem.png" alt="Blue gems" width={18} height={18} />
+              <span className="font-bold text-blue-700 text-sm">{liveBlue}</span>
             </div>
 
             {/* Avatar with dropdown */}
@@ -139,8 +136,8 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
                 className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-base-300 focus:outline-none"
               >
                 <Image
-                  src={`/avatars/children/avatar-${avatarIndex}.png`}
-                  alt={displayName}
+                  src={`/avatars/adults/avatar-${user.avatar_index ?? 1}.png`}
+                  alt={user.display_name}
                   width={36}
                   height={36}
                   className="object-cover w-full h-full"
@@ -155,30 +152,46 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
               {avatarMenuOpen && (
                 <div className="absolute right-0 top-11 w-56 bg-base-100 rounded-box shadow-xl border border-base-200 z-50 py-2">
                   <div className="px-4 py-2 border-b border-base-200">
-                    <p className="font-semibold text-sm">{displayName}</p>
-                    {nickname && <p className="text-xs text-base-content/50">@{nickname}</p>}
+                    <p className="font-semibold text-sm">{user.display_name}</p>
+                    <p className="text-xs text-base-content/50">Parent Account</p>
                   </div>
                   <div className="flex flex-col py-1">
                     <Link
-                      href="/child/notifications"
+                      href="/parent-profile/notifications"
                       className="px-4 py-2 text-sm hover:bg-base-200 flex items-center justify-between"
                       onClick={() => { setAvatarMenuOpen(false); refreshCount() }}
                     >
                       Notifications
-                      {unread > 0 && (
-                        <span className="badge badge-sm badge-error">{unread > 9 ? '9+' : unread}</span>
-                      )}
+                      {unread > 0 && <span className="badge badge-sm badge-error">{unread > 9 ? '9+' : unread}</span>}
                     </Link>
-                    <Link href="/child/settings" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>
-                      My Settings
+                    <Link
+                      href="/register/add-child"
+                      className="px-4 py-2 text-sm hover:bg-base-200"
+                      onClick={() => setAvatarMenuOpen(false)}
+                    >
+                      Add Child
                     </Link>
-                    <Link href="/child/settings/content" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>
-                      Content Settings
+                    <Link
+                      href="/parent-profile/orders"
+                      className="px-4 py-2 text-sm hover:bg-base-200"
+                      onClick={() => setAvatarMenuOpen(false)}
+                    >
+                      Orders
                     </Link>
-                    <Link href="/child/leaderboard" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>Leaderboards</Link>
+                    <Link
+                      href="/parent-profile/settings"
+                      className="px-4 py-2 text-sm hover:bg-base-200"
+                      onClick={() => setAvatarMenuOpen(false)}
+                    >
+                      Settings
+                    </Link>
                   </div>
                   <div className="border-t border-base-200 flex flex-col py-1">
-                    <Link href="/profiles" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>
+                    <Link
+                      href="/profiles"
+                      className="px-4 py-2 text-sm hover:bg-base-200"
+                      onClick={() => setAvatarMenuOpen(false)}
+                    >
                       Switch Profile
                     </Link>
                     <button onClick={handleLogout} className="px-4 py-2 text-sm text-left hover:bg-base-200">
@@ -193,20 +206,20 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
 
         {/* ── Tab bar ── */}
         <div className="flex border-b border-base-200 px-4">
-          {[
-            { label: 'Home', href: '/child/home' },
-            { label: 'Trials', href: '/child/trials' },
-            { label: 'Quests', href: '/child/quests' },
-            { label: 'Classes', href: '/child/classes' },
-          ].map(({ label, href }) => (
-            <Link
-              key={label}
-              href={href}
-              className="tab tab-bordered text-sm px-4 py-2"
-            >
-              {label}
-            </Link>
-          ))}
+          {TABS.map(({ label, href }) => {
+            const isActive = href === '/parent-profile'
+              ? pathname === href
+              : pathname.startsWith(href)
+            return (
+              <Link
+                key={label}
+                href={href}
+                className={`tab tab-bordered text-sm px-4 py-2 ${isActive ? 'tab-active font-medium' : ''}`}
+              >
+                {label}
+              </Link>
+            )
+          })}
         </div>
       </header>
 

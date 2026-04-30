@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
 import type { AuthUser, ChildProfile } from '@/types/knowly'
 
 export default function ParentProfilePage() {
@@ -90,6 +91,21 @@ export default function ParentProfilePage() {
           <p className="text-sm text-base-content/50">Parent Account</p>
         </div>
       </div>
+
+      {/* ── Quick links ── */}
+      <Link
+        href="/parent-profile/analytics"
+        className="flex items-center justify-between bg-base-200 rounded-2xl px-4 py-3 hover:bg-base-300 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">📊</span>
+          <div>
+            <p className="font-semibold text-sm">Progress Report</p>
+            <p className="text-xs text-base-content/50">See how your child is doing</p>
+          </div>
+        </div>
+        <span className="text-base-content/30 text-lg">›</span>
+      </Link>
 
       {/* ── Assign Gems ── */}
       <section className="flex flex-col gap-3">

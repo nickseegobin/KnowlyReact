@@ -1,9 +1,13 @@
 'use client'
 
-import { use, useState, useEffect } from 'react'
+import { use, useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Breadcrumb from '@/components/child/Breadcrumb'
+import QuestionRenderer from '@/components/QuestionRenderer'
+import { haptic, HAPTIC_CORRECT, HAPTIC_WRONG, HAPTIC_COMPLETE, HAPTIC_SELECT } from '@/lib/haptic'
+import { soundCorrect, soundWrong, soundComplete, soundSelect } from '@/lib/sound'
+import { confettiCompletion } from '@/lib/confetti'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -13,28 +17,25 @@ interface KnowledgeCheck {
   correct_answer: string
   explanation: string
   question_number: number
+  tip?: string
 }
 
 interface WorkedExample {
   context: string
   problem: string
-  solution: string[]
+  solution: (string | Record<string, string>)[]
   example_number: number
 }
 
 interface Section {
-  section_id?: string       // WP store format: "s_001"
-  section_number?: number   // Railway format: 1, 2, 3
+  section_id?: string
+  section_number?: number
   title: string
-  content?: string          // simple string — normalized to explanation[] on load
+  content?: string
   explanation?: string[]
   knowledge_check?: KnowledgeCheck[]
   worked_examples?: WorkedExample[]
   objectives_covered?: string[]
-}
-
-interface QuestContent {
-  sections: Section[]
 }
 
 interface QuestData {
@@ -43,8 +44,8 @@ interface QuestData {
   title?: string
   subject: string
   topic?: string
-  content?: QuestContent
-  sections?: Section[]   // in case sections are top-level
+  content?: { sections: Section[] }
+  sections?: Section[]
   gem_cost?: number
   badge_name?: string
 }
@@ -55,19 +56,24 @@ interface WrongItem {
   attempts: number
 }
 
-// ── Phase types ───────────────────────────────────────────────────────────────
-
 type Phase =
   | 'loading'
-  | 'confirm'          // gem cost confirmation screen
-  | 'starting'         // POST /start
-  | 'lesson'           // showing explanation
-  | 'quiz'             // knowledge_check MCQ
-  | 'quiz_feedback'    // show correct / wrong
-  | 'review'           // re-presenting wrong answers
+  | 'confirm'
+  | 'starting'
+  | 'lesson'
+  | 'quiz'
+  | 'quiz_feedback'
+  | 'review'
   | 'review_feedback'
   | 'completing'
   | 'error'
+
+const COMBO_MESSAGES: Record<number, string> = {
+  3: '🔥 3 in a row!',
+  5: '⚡ On fire!',
+  8: '💫 Unstoppable!',
+  10: '🏆 Legendary!',
+}
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -89,19 +95,28 @@ export default function QuestDetailPage({
   const [error, setError] = useState('')
 
   // ── Lesson state ──────────────────────────────────────────────────────────
-  const [sectionIdx, setSectionIdx] = useState(0)      // current section index
-  const [paraIdx, setParaIdx] = useState(0)             // current paragraph index within explanation
+  const [sectionIdx, setSectionIdx] = useState(0)
+  const [paraIdx, setParaIdx] = useState(0)
 
   // ── Quiz state ────────────────────────────────────────────────────────────
-  const [checkIdx, setCheckIdx] = useState(0)           // current knowledge_check index
+  const [checkIdx, setCheckIdx] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
+  const [flashSelected, setFlashSelected] = useState<string | null>(null)
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
 
   // ── Wrong pool ────────────────────────────────────────────────────────────
   const [wrongPool, setWrongPool] = useState<WrongItem[]>([])
   const [reviewIdx, setReviewIdx] = useState(0)
   const [reviewSelected, setReviewSelected] = useState<string | null>(null)
+  const [flashReviewSelected, setFlashReviewSelected] = useState<string | null>(null)
   const [reviewCorrect, setReviewCorrect] = useState<boolean | null>(null)
+
+  // ── Gamification state ────────────────────────────────────────────────────
+  const [combo, setCombo] = useState(0)
+  const comboRef = useRef(0)
+  const [comboToast, setComboToast] = useState<string | null>(null)
+  const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [shaking, setShaking] = useState(false)
 
   // ── Load quest ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -111,10 +126,7 @@ export default function QuestDetailPage({
         if (!res.ok) throw new Error('Quest not found')
         const data: QuestData = await res.json()
         setQuest(data)
-        // content may be nested under .content or top-level .sections
         const raw = data.content?.sections ?? data.sections ?? []
-        // Normalize: coerce content string → explanation array so the rest of
-        // the component always has a consistent shape regardless of source format.
         const s = raw.map((sec) => ({
           ...sec,
           explanation: sec.explanation ?? (sec.content ? [sec.content] : []),
@@ -136,7 +148,37 @@ export default function QuestDetailPage({
   const isLastPara = paraIdx >= (currentSection?.explanation?.length ?? 1) - 1
   const currentCheck = currentSection?.knowledge_check?.[checkIdx]
   const totalSections = sections.length
-  const completedSections = sectionIdx  // sections fully done
+  const completedSections = sectionIdx
+
+  // ── Gamification helpers ──────────────────────────────────────────────────
+
+  const showComboToast = useCallback((msg: string) => {
+    if (comboTimerRef.current) clearTimeout(comboTimerRef.current)
+    setComboToast(msg)
+    comboTimerRef.current = setTimeout(() => setComboToast(null), 2200)
+  }, [])
+
+  const triggerShake = useCallback(() => {
+    setShaking(true)
+    setTimeout(() => setShaking(false), 420)
+  }, [])
+
+  const handleCorrect = useCallback(() => {
+    soundCorrect()
+    haptic(HAPTIC_CORRECT)
+    const next = comboRef.current + 1
+    comboRef.current = next
+    setCombo(next)
+    if (COMBO_MESSAGES[next]) showComboToast(COMBO_MESSAGES[next])
+  }, [showComboToast])
+
+  const handleWrong = useCallback(() => {
+    soundWrong()
+    haptic(HAPTIC_WRONG)
+    comboRef.current = 0
+    setCombo(0)
+    triggerShake()
+  }, [triggerShake])
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -159,6 +201,8 @@ export default function QuestDetailPage({
       setParaIdx(0)
       setCheckIdx(0)
       setWrongPool([])
+      comboRef.current = 0
+      setCombo(0)
       setPhase('lesson')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start quest')
@@ -169,33 +213,36 @@ export default function QuestDetailPage({
   function advanceLesson() {
     if (!isLastPara) {
       setParaIdx((p) => p + 1)
+      return
+    }
+    const checks = currentSection?.knowledge_check ?? []
+    if (checks.length > 0) {
+      setCheckIdx(0)
+      setSelected(null)
+      setIsCorrect(null)
+      setPhase('quiz')
     } else {
-      const checks = currentSection?.knowledge_check ?? []
-      if (checks.length > 0) {
-        // Move to quiz for this section
+      if (sectionIdx + 1 < sections.length) {
+        setSectionIdx((i) => i + 1)
+        setParaIdx(0)
         setCheckIdx(0)
-        setSelected(null)
-        setIsCorrect(null)
-        setPhase('quiz')
+        setPhase('lesson')
       } else {
-        // No knowledge checks — advance directly to next section or complete
-        if (sectionIdx + 1 < sections.length) {
-          setSectionIdx((i) => i + 1)
-          setParaIdx(0)
-          setCheckIdx(0)
-          setPhase('lesson')
-        } else {
-          wrongPool.length > 0 ? setPhase('review') : completeQuest()
-        }
+        wrongPool.length > 0 ? setPhase('review') : completeQuest()
       }
     }
   }
 
-  function submitAnswer() {
-    if (!selected || !currentCheck) return
-    const correct = selected === currentCheck.correct_answer
+  function submitAnswer(forceAnswer?: string) {
+    const ans = forceAnswer ?? selected
+    if (!ans || !currentCheck) return
+    const correct = ans === currentCheck.correct_answer
+    setSelected(ans)
     setIsCorrect(correct)
-    if (!correct) {
+    if (correct) {
+      handleCorrect()
+    } else {
+      handleWrong()
       setWrongPool((pool) => [
         ...pool,
         { sectionTitle: currentSection.title, check: currentCheck, attempts: 1 },
@@ -209,22 +256,23 @@ export default function QuestDetailPage({
     if (checkIdx + 1 < checks.length) {
       setCheckIdx((i) => i + 1)
       setSelected(null)
+      setFlashSelected(null)
       setIsCorrect(null)
       setPhase('quiz')
     } else {
-      // Section done — move to next section or review
       if (sectionIdx + 1 < sections.length) {
         setSectionIdx((i) => i + 1)
         setParaIdx(0)
         setCheckIdx(0)
         setSelected(null)
+        setFlashSelected(null)
         setIsCorrect(null)
         setPhase('lesson')
       } else {
-        // All sections done
         if (wrongPool.length > 0) {
           setReviewIdx(0)
           setReviewSelected(null)
+          setFlashReviewSelected(null)
           setReviewCorrect(null)
           setPhase('review')
         } else {
@@ -234,20 +282,22 @@ export default function QuestDetailPage({
     }
   }
 
-  function submitReview() {
-    if (!reviewSelected) return
+  function submitReview(forceAnswer?: string) {
+    const ans = forceAnswer ?? reviewSelected
+    if (!ans) return
     const item = wrongPool[reviewIdx]
-    const correct = reviewSelected === item.check.correct_answer
+    const correct = ans === item.check.correct_answer
+    setReviewSelected(ans)
     setReviewCorrect(correct)
+    if (correct) handleCorrect()
+    else handleWrong()
     setPhase('review_feedback')
   }
 
   function advanceReview() {
     const item = wrongPool[reviewIdx]
-    const correct = reviewCorrect
-    // Remove from pool if correct, keep (move to end) if wrong again
     let newPool = wrongPool.filter((_, i) => i !== reviewIdx)
-    if (!correct) {
+    if (!reviewCorrect) {
       newPool = [...newPool, { ...item, attempts: item.attempts + 1 }]
     }
     setWrongPool(newPool)
@@ -257,6 +307,7 @@ export default function QuestDetailPage({
     } else {
       setReviewIdx(0)
       setReviewSelected(null)
+      setFlashReviewSelected(null)
       setReviewCorrect(null)
       setPhase('review')
     }
@@ -264,6 +315,9 @@ export default function QuestDetailPage({
 
   async function completeQuest() {
     setPhase('completing')
+    soundComplete()
+    haptic(HAPTIC_COMPLETE)
+    confettiCompletion()
     try {
       const res = await fetch('/api/quests/complete', {
         method: 'POST',
@@ -294,27 +348,34 @@ export default function QuestDetailPage({
     }
   }
 
-  // ── Progress bar value ────────────────────────────────────────────────────
+  // ── Progress ──────────────────────────────────────────────────────────────
   const progressPct = totalSections === 0 ? 0 :
     Math.round((completedSections / totalSections) * 100)
+
+  // ── Combo toast container (always rendered) ───────────────────────────────
+  const ComboToast = comboToast ? (
+    <div className="fixed top-20 left-0 right-0 z-50 flex justify-center pointer-events-none">
+      <div key={comboToast} className="animate-pop-in bg-base-100 border border-base-300 shadow-xl rounded-2xl px-5 py-3 font-bold text-base">
+        {comboToast}
+      </div>
+    </div>
+  ) : null
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
 
-  // ── Loading ───────────────────────────────────────────────────────────────
   if (phase === 'loading' || phase === 'starting' || phase === 'completing') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <span className="loading loading-spinner loading-lg text-primary" />
-        <p className="text-base-content/60 text-sm">
+        <span className="loading loading-ring loading-lg text-primary" />
+        <p className="text-base-content/60 text-sm animate-pulse">
           {phase === 'completing' ? 'Saving your progress…' : 'Loading quest…'}
         </p>
       </div>
     )
   }
 
-  // ── Error ─────────────────────────────────────────────────────────────────
   if (phase === 'error') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
@@ -327,10 +388,10 @@ export default function QuestDetailPage({
     )
   }
 
-  // ── Confirm screen ────────────────────────────────────────────────────────
+  // ── Confirm ───────────────────────────────────────────────────────────────
   if (phase === 'confirm') {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5 animate-fade-in-up">
         <div className="flex items-center gap-3">
           <Link href={`/child/quests/${encodedSubject}/${encodedTopic}`} className="btn btn-circle btn-sm btn-ghost border border-base-300">‹</Link>
           <Breadcrumb crumbs={[
@@ -348,14 +409,29 @@ export default function QuestDetailPage({
             <span className="badge badge-ghost badge-sm">{topic}</span>
           </div>
           <h1 className="text-2xl font-bold">{quest?.module_title ?? quest?.title ?? quest_id}</h1>
-          <p className="text-base-content/60 text-sm mt-1">{sections.length} section{sections.length !== 1 ? 's' : ''}</p>
+          <p className="text-base-content/60 text-sm mt-1">
+            {sections.length} section{sections.length !== 1 ? 's' : ''}
+          </p>
         </div>
 
-        {/* Sections list */}
+        {/* Section journey using daisyUI steps — hidden for single-section quests */}
+        {sections.length > 1 && (
+          <div className="overflow-x-auto pb-1">
+            <ul className="steps steps-horizontal w-full text-[10px]">
+              {sections.map((s, i) => (
+                <li key={s.section_id ?? i} className="step step-primary">
+                  {i + 1}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Section labels */}
         {sections.length > 0 && (
           <div className="flex flex-col gap-2">
             {sections.map((s, i) => (
-              <div key={s.section_id ?? s.section_number ?? i} className="flex items-center gap-3 p-3 rounded-xl bg-base-200">
+              <div key={s.section_id ?? i} className="flex items-center gap-3 p-3 rounded-xl bg-base-200">
                 <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
                   {s.section_number ?? i + 1}
                 </div>
@@ -380,29 +456,38 @@ export default function QuestDetailPage({
     )
   }
 
-  // ── Lesson screen ─────────────────────────────────────────────────────────
+  // ── Lesson ────────────────────────────────────────────────────────────────
   if (phase === 'lesson') {
+    const examples = currentSection?.worked_examples ?? []
     return (
-      <div className="flex flex-col gap-4 min-h-[calc(100vh-8rem)]">
-        {/* Progress */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 bg-base-300 rounded-full h-2">
-            <div className="h-2 rounded-full bg-primary transition-all duration-500" style={{ width: `${progressPct}%` }} />
-          </div>
-          <span className="text-xs text-base-content/40 shrink-0">{completedSections}/{totalSections}</span>
-        </div>
+      <div key={`lesson-${sectionIdx}`} className="flex flex-col gap-4 min-h-[calc(100vh-8rem)] animate-fade-in-up">
+        {ComboToast}
 
-        {/* Section label */}
+        {/* Steps progress — hidden for single-section quests */}
+        {totalSections > 1 && (
+          <div className="overflow-x-auto">
+            <ul className="steps steps-horizontal w-full text-[10px]">
+              {sections.map((_, i) => (
+                <li key={i} className={`step ${i <= sectionIdx ? 'step-primary' : ''}`}>
+                  {i + 1}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div>
           <p className="text-xs text-base-content/40 uppercase tracking-wide font-medium">
-            Section {currentSection?.section_number ?? (sectionIdx + 1)} of {totalSections}
+            {totalSections > 1 ? `Section ${currentSection?.section_number ?? (sectionIdx + 1)} of ${totalSections}` : 'Lesson'}
           </p>
           <h2 className="text-xl font-bold mt-0.5">{currentSection?.title}</h2>
         </div>
 
         {/* Explanation paragraph */}
-        <div className="flex-1 rounded-2xl bg-base-200 p-5">
-          <p className="text-base leading-relaxed text-base-content">{currentPara}</p>
+        <div className="flex-1 rounded-2xl bg-base-200 p-5 shadow-sm">
+          <p key={`para-${paraIdx}`} className="text-base leading-relaxed text-base-content animate-fade-in">
+            <QuestionRenderer text={currentPara} />
+          </p>
           {(currentSection?.explanation?.length ?? 0) > 1 && (
             <p className="text-xs text-base-content/40 mt-4 text-right">
               {paraIdx + 1} / {currentSection?.explanation?.length}
@@ -410,7 +495,34 @@ export default function QuestDetailPage({
           )}
         </div>
 
-        {/* Next button */}
+        {/* Worked examples — collapsible reference */}
+        {examples.length > 0 && (
+          <div className="collapse collapse-arrow bg-base-200 rounded-2xl">
+            <input type="checkbox" />
+            <div className="collapse-title text-sm font-semibold py-3 min-h-0">
+              📝 Worked Examples ({examples.length})
+            </div>
+            <div className="collapse-content flex flex-col gap-5 pt-1">
+              {examples.map((ex) => (
+                <div key={ex.example_number} className="flex flex-col gap-2">
+                  <p className="text-xs font-bold text-primary uppercase tracking-wide">
+                    Example {ex.example_number}
+                  </p>
+                  <p className="text-xs italic text-base-content/60 leading-relaxed">{ex.context}</p>
+                  <p className="text-sm font-semibold">{ex.problem}</p>
+                  <div className="flex flex-col gap-1 pl-3 border-l-2 border-primary/30">
+                    {ex.solution.map((step, i) => (
+                      <p key={i} className="text-xs text-base-content/80 leading-relaxed">
+                        {typeof step === 'string' ? step : (step as Record<string, string>).step ?? (step as Record<string, string>).detail ?? (step as Record<string, string>).description ?? JSON.stringify(step)}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <button className="btn btn-primary w-full" onClick={advanceLesson}>
           {isLastPara ? 'Check Your Understanding →' : 'Next →'}
         </button>
@@ -418,18 +530,23 @@ export default function QuestDetailPage({
     )
   }
 
-  // ── Quiz screen ───────────────────────────────────────────────────────────
+  // ── Quiz ──────────────────────────────────────────────────────────────────
   if (phase === 'quiz') {
     const checks = currentSection?.knowledge_check ?? []
     return (
-      <div className="flex flex-col gap-4 min-h-[calc(100vh-8rem)]">
-        {/* Progress */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 bg-base-300 rounded-full h-2">
-            <div className="h-2 rounded-full bg-primary transition-all duration-500" style={{ width: `${progressPct}%` }} />
+      <div key={`quiz-${sectionIdx}-${checkIdx}`} className="flex flex-col gap-4 min-h-[calc(100vh-8rem)] animate-fade-in-up">
+        {ComboToast}
+
+        {/* Steps progress — hidden for single-section quests */}
+        {totalSections > 1 && (
+          <div className="overflow-x-auto">
+            <ul className="steps steps-horizontal w-full text-[10px]">
+              {sections.map((_, i) => (
+                <li key={i} className={`step ${i <= sectionIdx ? 'step-primary' : ''}`}>{i + 1}</li>
+              ))}
+            </ul>
           </div>
-          <span className="text-xs text-base-content/40 shrink-0">{completedSections}/{totalSections}</span>
-        </div>
+        )}
 
         <div>
           <p className="text-xs text-primary uppercase tracking-wide font-semibold">
@@ -441,37 +558,56 @@ export default function QuestDetailPage({
         </div>
 
         {/* Question */}
-        <div className="rounded-2xl bg-base-200 p-5">
-          <p className="text-base font-medium leading-relaxed">{currentCheck?.question}</p>
+        <div className="rounded-2xl bg-base-200 p-5 shadow-sm">
+          <p className="text-base font-medium leading-relaxed">
+            <QuestionRenderer text={currentCheck?.question ?? ''} />
+          </p>
         </div>
 
         {/* Options */}
         <div className="flex flex-col gap-3">
-          {Object.entries(currentCheck?.options ?? {}).map(([key, value]) => (
-            <button
-              key={key}
-              onClick={() => setSelected(key)}
-              className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-colors ${
-                selected === key
-                  ? 'border-primary bg-primary/10 text-primary font-semibold'
-                  : 'border-base-300 bg-base-100 hover:bg-base-200'
-              }`}
-            >
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                selected === key ? 'bg-primary text-primary-content' : 'bg-base-300'
-              }`}>{key}</span>
-              <span>{value}</span>
-            </button>
-          ))}
+          {Object.entries(currentCheck?.options ?? {}).map(([key, value]) => {
+            const isFlashed = flashSelected === key
+            const isOther = flashSelected !== null && !isFlashed
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  if (flashSelected) return
+                  soundSelect()
+                  haptic(HAPTIC_SELECT)
+                  setFlashSelected(key)
+                  setSelected(key)
+                  setTimeout(() => submitAnswer(key), 400)
+                }}
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left
+                  transition-all duration-150 active:scale-95
+                  ${isFlashed
+                    ? 'border-primary bg-primary text-primary-content font-semibold scale-[1.01]'
+                    : isOther
+                    ? 'border-base-300 bg-base-100 opacity-40'
+                    : 'border-base-300 bg-base-100 hover:bg-base-200'
+                  }`}
+              >
+                <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
+                  isFlashed ? 'bg-primary-content/20 text-primary-content' : 'bg-base-300'
+                }`}>{key}</span>
+                <span><QuestionRenderer text={value} /></span>
+              </button>
+            )
+          })}
         </div>
 
-        <button
-          className="btn btn-primary w-full mt-auto"
-          onClick={submitAnswer}
-          disabled={!selected}
-        >
-          Submit Answer
-        </button>
+        {/* Tip hint */}
+        {currentCheck?.tip && (
+          <div className="collapse collapse-arrow bg-base-200 rounded-xl">
+            <input type="checkbox" />
+            <div className="collapse-title text-sm py-2 min-h-0 font-medium">💡 Need a hint?</div>
+            <div className="collapse-content text-sm text-base-content/70 leading-relaxed">
+              {currentCheck.tip}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -480,17 +616,24 @@ export default function QuestDetailPage({
   if (phase === 'quiz_feedback') {
     return (
       <div className="flex flex-col gap-4 min-h-[calc(100vh-8rem)]">
-        {/* Result banner */}
-        <div className={`rounded-2xl p-5 ${isCorrect ? 'bg-success/10 border border-success/20' : 'bg-error/10 border border-error/20'}`}>
-          <p className={`text-xl font-bold ${isCorrect ? 'text-success' : 'text-error'}`}>
+        {ComboToast}
+        <div
+          className={`rounded-2xl p-5 shadow-sm animate-fade-in-up ${
+            isCorrect ? 'bg-success/10 border border-success/20' : `bg-error/10 border border-error/20 ${shaking ? 'animate-shake' : ''}`
+          }`}
+        >
+          <p className={`text-2xl font-bold ${isCorrect ? 'text-success' : 'text-error'}`}>
             {isCorrect ? '✓ Correct!' : '✗ Not quite'}
           </p>
           <p className="text-sm text-base-content/70 mt-2 leading-relaxed">
             {currentCheck?.explanation}
           </p>
-          {!isCorrect && (
+          {!isCorrect && currentCheck && (
             <p className="text-sm font-semibold mt-3">
-              Correct answer: <span className="text-success">{currentCheck?.correct_answer} — {currentCheck?.options[currentCheck.correct_answer]}</span>
+              Correct answer:{' '}
+              <span className="text-success">
+                {currentCheck.correct_answer} — {currentCheck.options[currentCheck.correct_answer]}
+              </span>
             </p>
           )}
         </div>
@@ -501,6 +644,12 @@ export default function QuestDetailPage({
           </p>
         )}
 
+        {combo >= 3 && isCorrect && (
+          <div className="text-center text-sm font-semibold text-warning">
+            🔥 {combo} in a row!
+          </div>
+        )}
+
         <button className="btn btn-primary w-full mt-auto" onClick={advanceQuiz}>
           Continue →
         </button>
@@ -508,54 +657,69 @@ export default function QuestDetailPage({
     )
   }
 
-  // ── Review wrong answers ──────────────────────────────────────────────────
+  // ── Review ────────────────────────────────────────────────────────────────
   if (phase === 'review') {
     const item = wrongPool[reviewIdx]
     return (
-      <div className="flex flex-col gap-4 min-h-[calc(100vh-8rem)]">
-        <div className="rounded-2xl bg-warning/10 border border-warning/20 p-4">
-          <p className="text-sm font-semibold text-warning">📌 Review Round</p>
-          <p className="text-xs text-base-content/60 mt-1">
-            {wrongPool.length} question{wrongPool.length !== 1 ? 's' : ''} left to master
+      <div key={`review-${reviewIdx}`} className="flex flex-col gap-4 min-h-[calc(100vh-8rem)] animate-fade-in-up">
+        {ComboToast}
+
+        {/* Review header */}
+        <div className="rounded-2xl bg-warning/10 border border-warning/20 p-4 flex items-center gap-3">
+          <span className="text-2xl">🔁</span>
+          <div>
+            <p className="text-sm font-bold text-warning">Review Round</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="countdown font-mono text-lg font-bold text-warning">
+                <span style={{ '--value': wrongPool.length } as React.CSSProperties} />
+              </span>
+              <span className="text-xs text-base-content/60">
+                question{wrongPool.length !== 1 ? 's' : ''} left to master
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-xs text-base-content/40">{item.sectionTitle}</p>
+
+        <div className="rounded-2xl bg-base-200 p-5 shadow-sm">
+          <p className="text-base font-medium leading-relaxed">
+            <QuestionRenderer text={item.check.question} />
           </p>
         </div>
 
-        <div>
-          <p className="text-xs text-base-content/40">{item.sectionTitle}</p>
-        </div>
-
-        {/* Question */}
-        <div className="rounded-2xl bg-base-200 p-5">
-          <p className="text-base font-medium leading-relaxed">{item.check.question}</p>
-        </div>
-
-        {/* Options */}
         <div className="flex flex-col gap-3">
-          {Object.entries(item.check.options).map(([key, value]) => (
-            <button
-              key={key}
-              onClick={() => setReviewSelected(key)}
-              className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-colors ${
-                reviewSelected === key
-                  ? 'border-primary bg-primary/10 text-primary font-semibold'
-                  : 'border-base-300 bg-base-100 hover:bg-base-200'
-              }`}
-            >
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                reviewSelected === key ? 'bg-primary text-primary-content' : 'bg-base-300'
-              }`}>{key}</span>
-              <span>{value}</span>
-            </button>
-          ))}
+          {Object.entries(item.check.options).map(([key, value]) => {
+            const isFlashed = flashReviewSelected === key
+            const isOther = flashReviewSelected !== null && !isFlashed
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  if (flashReviewSelected) return
+                  soundSelect()
+                  haptic(HAPTIC_SELECT)
+                  setFlashReviewSelected(key)
+                  setReviewSelected(key)
+                  setTimeout(() => submitReview(key), 400)
+                }}
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left
+                  transition-all duration-150 active:scale-95
+                  ${isFlashed
+                    ? 'border-primary bg-primary text-primary-content font-semibold scale-[1.01]'
+                    : isOther
+                    ? 'border-base-300 bg-base-100 opacity-40'
+                    : 'border-base-300 bg-base-100 hover:bg-base-200'
+                  }`}
+              >
+                <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                  isFlashed ? 'bg-primary-content/20 text-primary-content' : 'bg-base-300'
+                }`}>{key}</span>
+                <span><QuestionRenderer text={value} /></span>
+              </button>
+            )
+          })}
         </div>
-
-        <button
-          className="btn btn-primary w-full mt-auto"
-          onClick={submitReview}
-          disabled={!reviewSelected}
-        >
-          Submit Answer
-        </button>
       </div>
     )
   }
@@ -565,8 +729,15 @@ export default function QuestDetailPage({
     const item = wrongPool[reviewIdx]
     return (
       <div className="flex flex-col gap-4 min-h-[calc(100vh-8rem)]">
-        <div className={`rounded-2xl p-5 ${reviewCorrect ? 'bg-success/10 border border-success/20' : 'bg-error/10 border border-error/20'}`}>
-          <p className={`text-xl font-bold ${reviewCorrect ? 'text-success' : 'text-error'}`}>
+        {ComboToast}
+        <div
+          className={`rounded-2xl p-5 shadow-sm animate-fade-in-up ${
+            reviewCorrect
+              ? 'bg-success/10 border border-success/20'
+              : `bg-error/10 border border-error/20 ${shaking ? 'animate-shake' : ''}`
+          }`}
+        >
+          <p className={`text-2xl font-bold ${reviewCorrect ? 'text-success' : 'text-error'}`}>
             {reviewCorrect ? '✓ Got it!' : '✗ Keep trying'}
           </p>
           <p className="text-sm text-base-content/70 mt-2 leading-relaxed">
@@ -574,7 +745,10 @@ export default function QuestDetailPage({
           </p>
           {!reviewCorrect && (
             <p className="text-sm font-semibold mt-3">
-              Correct answer: <span className="text-success">{item.check.correct_answer} — {item.check.options[item.check.correct_answer]}</span>
+              Correct answer:{' '}
+              <span className="text-success">
+                {item.check.correct_answer} — {item.check.options[item.check.correct_answer]}
+              </span>
             </p>
           )}
         </div>

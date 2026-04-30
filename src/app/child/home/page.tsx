@@ -6,7 +6,7 @@ const HOME_ITEMS = [
   { label: 'Trials', href: '/child/trials', desc: 'Practice exams to test your knowledge and earn gems.' },
   { label: 'Classes', href: '/child/classes', desc: 'View classes assigned by your teacher.' },
   { label: 'Leaderboard', href: '/child/leaderboard', desc: 'See how you rank against other students today.' },
-  { label: 'Progress', href: '/my-progress', desc: 'Track your improvement across all subjects.' },
+  { label: 'Progress', href: '/child/my-progress', desc: 'Track your improvement across all subjects.' },
   { label: 'Badges', href: '/badges', desc: 'Earn badges by completing Quests for the first time.' },
   { label: 'News', href: '/news', desc: 'Platform updates and announcements.' },
 ]

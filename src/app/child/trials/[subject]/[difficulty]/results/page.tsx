@@ -1,10 +1,11 @@
 'use client'
 
-import { use, useEffect, useState } from 'react'
+import { use, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Breadcrumb from '@/components/child/Breadcrumb'
 import Link from 'next/link'
+import { confettiCelebration, confettiCompletion } from '@/lib/confetti'
 
 interface TopicBreakdown {
   topic: string
@@ -39,6 +40,37 @@ function formatTime(secs: number) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+interface ScoreTier {
+  label: string
+  emoji: string
+  color: string
+  ringColor: string
+  bg: string
+}
+
+function getTier(pct: number): ScoreTier {
+  if (pct >= 90) return {
+    label: 'Outstanding!', emoji: '🏆',
+    color: 'text-warning', ringColor: 'oklch(var(--wa))',
+    bg: 'bg-warning/10 border-warning/30',
+  }
+  if (pct >= 70) return {
+    label: 'Great job!', emoji: '🎉',
+    color: 'text-success', ringColor: 'oklch(var(--su))',
+    bg: 'bg-success/10 border-success/30',
+  }
+  if (pct >= 50) return {
+    label: 'Good effort!', emoji: '👍',
+    color: 'text-primary', ringColor: 'oklch(var(--p))',
+    bg: 'bg-primary/10 border-primary/30',
+  }
+  return {
+    label: 'Keep going!', emoji: '💪',
+    color: 'text-base-content', ringColor: 'oklch(var(--bc))',
+    bg: 'bg-base-200 border-base-300',
+  }
+}
+
 export default function ResultsPage({
   params,
 }: {
@@ -49,38 +81,73 @@ export default function ResultsPage({
   const router = useRouter()
 
   const [result, setResult] = useState<TrialResult | null>(null)
+  const [animate, setAnimate] = useState(false)
+  const [displayPct, setDisplayPct] = useState(0)
+  const confettiFiredRef = useRef(false)
 
   useEffect(() => {
     const stored = sessionStorage.getItem('trial_result')
     if (!stored) { router.push('/child/trials'); return }
     try {
       setResult(JSON.parse(stored))
-      // Remove after parsing — only once on mount (empty dep array prevents
-      // React Strict Mode's double-invoke from clearing storage before second read)
     } catch {
       router.push('/child/trials')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Trigger animation after result loads
+  useEffect(() => {
+    if (!result) return
+    const t = setTimeout(() => setAnimate(true), 80)
+    return () => clearTimeout(t)
+  }, [result])
+
+  // Score count-up + confetti
+  useEffect(() => {
+    if (!result || !animate) return
+    const target = Math.round(result.percentage ?? 0)
+
+    // Count-up animation
+    let startTime: number
+    const step = (ts: number) => {
+      if (!startTime) startTime = ts
+      const pct = Math.min((ts - startTime) / 1000, 1)
+      setDisplayPct(Math.round(pct * target))
+      if (pct < 1) requestAnimationFrame(step)
+    }
+    const rafId = requestAnimationFrame(step)
+
+    // Confetti based on score
+    if (!confettiFiredRef.current) {
+      confettiFiredRef.current = true
+      if (target >= 90) {
+        setTimeout(() => confettiCelebration(), 500)
+      } else if (target >= 70) {
+        setTimeout(() => confettiCompletion(), 500)
+      }
+    }
+
+    return () => cancelAnimationFrame(rafId)
+  }, [result, animate])
+
   if (!result) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <span className="loading loading-spinner loading-lg" />
+        <span className="loading loading-ring loading-lg text-primary" />
       </div>
     )
   }
 
   const pct = Math.round(result.percentage ?? 0)
-  // Circle progress — circumference of r=40 circle
+  const tier = getTier(pct)
   const r = 40
   const circ = 2 * Math.PI * r
-  const dash = (pct / 100) * circ
-
+  const dash = animate ? (pct / 100) * circ : 0
   const lb = result.leaderboard_update
 
   return (
-    <div className="flex flex-col gap-4 pb-8">
+    <div className={`flex flex-col gap-4 pb-8 transition-all duration-500 ${animate ? 'opacity-100' : 'opacity-0'}`}>
       <div className="flex items-center gap-3">
         <button onClick={() => router.push('/child/home')} className="btn btn-circle btn-sm btn-ghost border border-base-300">‹</button>
         <Breadcrumb crumbs={[
@@ -91,46 +158,53 @@ export default function ResultsPage({
         ]} />
       </div>
 
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-bold text-lg italic">{subject} Results</p>
-        </div>
+      {/* Hero tier */}
+      <div className={`flex flex-col items-center gap-2 py-4 rounded-2xl border ${tier.bg}`}>
+        <div className={`text-6xl ${animate ? 'animate-bounce' : ''}`}>{tier.emoji}</div>
+        <p className={`text-2xl font-black ${tier.color}`}>{tier.label}</p>
+        <p className="text-sm text-base-content/60 italic">{subject} — {result.difficulty} Trial</p>
       </div>
 
       {/* Score card */}
       <div className="card bg-base-200 rounded-2xl p-4 flex flex-row items-center gap-4">
-        {/* Donut */}
+        {/* Animated donut */}
         <div className="relative w-24 h-24 shrink-0">
           <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
             <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" strokeOpacity={0.1} strokeWidth="10" />
             <circle
-              cx="50" cy="50" r={r} fill="none"
-              stroke="oklch(var(--p))"
+              cx="50" cy="50" r={r}
+              fill="none"
+              stroke={tier.ringColor}
               strokeWidth="10"
-              strokeDasharray={`${dash} ${circ}`}
+              strokeDasharray={`${circ}`}
+              strokeDashoffset={`${circ - dash}`}
               strokeLinecap="round"
+              className="transition-all duration-1000"
+              style={{ transitionDelay: '200ms' }}
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-lg font-bold">{pct}%</span>
+          <span className={`absolute inset-0 flex items-center justify-center text-lg font-black ${tier.color}`}>
+            {displayPct}%
+          </span>
         </div>
 
-        <div className="flex flex-col gap-1 text-sm">
-          <div className="flex justify-between gap-8">
-            <span className="text-base-content/60">Correct Answers</span>
-            <span className="font-semibold">{result.score}/{result.total}</span>
+        <div className="flex flex-col gap-1.5 text-sm flex-1">
+          <div className="flex justify-between gap-4">
+            <span className="text-base-content/60">Correct</span>
+            <span className="font-bold">{result.score}/{result.total}</span>
           </div>
-          <div className="flex justify-between gap-8">
-            <span className="text-base-content/60">Time Used</span>
-            <span className="font-semibold">{formatTime(result.time_taken_seconds)}</span>
+          <div className="flex justify-between gap-4">
+            <span className="text-base-content/60">Time</span>
+            <span className="font-bold">{formatTime(result.time_taken_seconds)}</span>
           </div>
-          <div className="flex justify-between gap-8">
+          <div className="flex justify-between gap-4">
             <span className="text-base-content/60">Score</span>
-            <span className="font-semibold">{pct}%</span>
+            <span className={`font-black ${tier.color}`}>{pct}%</span>
           </div>
         </div>
       </div>
 
-      {/* Leaderboard snippet */}
+      {/* Leaderboard */}
       {lb && (
         <div className="card bg-base-200 rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
@@ -148,9 +222,7 @@ export default function ResultsPage({
                 {lb.total_points_today ? ` · ${lb.total_points_today} pts today` : ''}
               </p>
             </div>
-            {lb.new_rank && (
-              <span className="text-3xl font-bold">#{lb.new_rank}</span>
-            )}
+            {lb.new_rank && <span className={`text-3xl font-black ${tier.color}`}>#{lb.new_rank}</span>}
           </div>
         </div>
       )}
@@ -171,11 +243,11 @@ export default function ResultsPage({
                   <div className="flex justify-between text-xs mb-1">
                     <span>{t.topic}</span>
                     <span className={`font-semibold ${needsWork ? 'text-error' : 'text-success'}`}>
-                      {t.correct}/{t.total} {needsWork ? 'Needs Work' : 'Good'}
+                      {t.correct}/{t.total} {needsWork ? '· Needs Work' : '· Good'}
                     </span>
                   </div>
                   <progress
-                    className={`progress w-full h-3 ${needsWork ? 'progress-error' : 'progress-success'}`}
+                    className={`progress w-full h-2.5 ${needsWork ? 'progress-error' : 'progress-success'}`}
                     value={tpct}
                     max={100}
                   />
@@ -186,7 +258,7 @@ export default function ResultsPage({
         </div>
       )}
 
-      {/* Performance review (AI insight) */}
+      {/* AI performance review */}
       {result.performance_review && (
         <div className="card bg-base-200 rounded-2xl p-4">
           <p className="font-bold italic mb-2">Performance Review</p>

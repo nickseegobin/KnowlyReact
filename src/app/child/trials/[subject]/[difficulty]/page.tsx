@@ -4,11 +4,15 @@ import { use, useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Breadcrumb from '@/components/child/Breadcrumb'
+import QuestionRenderer from '@/components/QuestionRenderer'
+import { haptic, HAPTIC_SELECT } from '@/lib/haptic'
+import { soundSelect } from '@/lib/sound'
 
 interface Question {
   question_id: string
   question_text?: string
   question?: string
+  tip?: string
   options: Record<string, string>
   meta: { topic: string; subtopic?: string; cognitive_level: string }
 }
@@ -60,8 +64,8 @@ export default function TrialPage({
   const [error, setError] = useState('')
   const [gemCost, setGemCost] = useState<number | null>(null)
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null)
+  const [flashSelected, setFlashSelected] = useState<string | null>(null)
 
-  // Ref to latest session/answers/currentIdx for checkpoint saves — avoids stale closure issues
   const sessionRef = useRef<Session | null>(null)
   const answersRef = useRef<Record<string, string>>({})
   const timingsRef = useRef<Record<string, number>>({})
@@ -73,7 +77,6 @@ export default function TrialPage({
   useEffect(() => { timingsRef.current = timings }, [timings])
   useEffect(() => { currentIdxRef.current = currentIdx }, [currentIdx])
 
-  // Fetch gem cost and check for active session on mount
   useEffect(() => {
     fetch('/api/gems/costs')
       .then((r) => r.ok ? r.json() : null)
@@ -87,18 +90,15 @@ export default function TrialPage({
       .then((data) => {
         const s = data?.session as ActiveSession | null
         if (!s) return
-        const subjectMatch = s.subject.toLowerCase().replace(/\s+/g, '_') ===
-          subject.toLowerCase().replace(/\s+/g, '_') ||
+        const subjectMatch =
+          s.subject.toLowerCase().replace(/\s+/g, '_') === subject.toLowerCase().replace(/\s+/g, '_') ||
           s.subject.toLowerCase() === subject.toLowerCase()
-        if (subjectMatch && s.difficulty === difficulty) {
-          setActiveSession(s)
-        }
+        if (subjectMatch && s.difficulty === difficulty) setActiveSession(s)
       })
       .catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Checkpoint fire-and-forget helper
   const saveCheckpoint = useCallback(() => {
     const s = sessionRef.current
     if (!s) return
@@ -106,16 +106,11 @@ export default function TrialPage({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        state: {
-          currentIdx: currentIdxRef.current,
-          answers: answersRef.current,
-          timings: timingsRef.current,
-        },
+        state: { currentIdx: currentIdxRef.current, answers: answersRef.current, timings: timingsRef.current },
       }),
     }).catch(() => {})
   }, [])
 
-  // Save checkpoint when tab becomes hidden (handles navigation away, phone lock, etc.)
   useEffect(() => {
     function onVisibility() {
       if (document.visibilityState === 'hidden' && sessionRef.current) saveCheckpoint()
@@ -157,7 +152,6 @@ export default function TrialPage({
     setPhase('loading')
     setError('')
     try {
-      // Cancel any existing active session for this child first
       if (activeSession) {
         await fetch(`/api/exams/${activeSession.session_id}/cancel`, { method: 'POST' }).catch(() => {})
         setActiveSession(null)
@@ -193,7 +187,6 @@ export default function TrialPage({
 
   const handleNext = useCallback((overrideAnswer?: string) => {
     if (!currentQ) return
-
     const ans = overrideAnswer !== undefined ? overrideAnswer : (selected ?? '')
     const spent = TIME_PER_Q - timeLeft
     const newAnswers = { ...answersRef.current, [currentQ.question_id]: ans }
@@ -202,23 +195,18 @@ export default function TrialPage({
     setAnswers(newAnswers)
     setTimings(newTimings)
     setSelected(null)
+    setFlashSelected(null)
     setTimeLeft(TIME_PER_Q)
 
-    // Autosave checkpoint every 3 answers
     answerCountRef.current += 1
     if (answerCountRef.current % 3 === 0) {
-      // Use updated values directly — refs update after setState
       const s = sessionRef.current
       if (s) {
         fetch(`/api/exams/${s.session_id}/checkpoint`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            state: {
-              currentIdx: currentIdxRef.current + 1,
-              answers: newAnswers,
-              timings: newTimings,
-            },
+            state: { currentIdx: currentIdxRef.current + 1, answers: newAnswers, timings: newTimings },
           }),
         }).catch(() => {})
       }
@@ -235,7 +223,6 @@ export default function TrialPage({
   async function submitExam(finalAnswers: Record<string, string>, finalTimings: Record<string, number> = {}) {
     if (!session) return
     setPhase('submitting')
-
     const payload = questions.map((q) => ({
       question_id: q.question_id,
       selected_answer: finalAnswers[q.question_id] ?? '',
@@ -246,7 +233,6 @@ export default function TrialPage({
       cognitive_level: q.meta.cognitive_level,
       time_taken_seconds: finalTimings[q.question_id] ?? 0,
     }))
-
     try {
       const res = await fetch(`/api/exams/${session.session_id}/submit`, {
         method: 'POST',
@@ -255,12 +241,7 @@ export default function TrialPage({
       })
       const data = await res.json()
       if (!res.ok) { setError('Submission failed'); return }
-
-      sessionStorage.setItem('trial_result', JSON.stringify({
-        ...data,
-        subject,
-        difficulty,
-      }))
+      sessionStorage.setItem('trial_result', JSON.stringify({ ...data, subject, difficulty }))
       router.push(`/child/trials/${encodedSubject}/${difficulty}/results`)
     } catch {
       setError('Failed to submit. Please try again.')
@@ -268,12 +249,10 @@ export default function TrialPage({
     }
   }
 
-  // ── Confirm screen ─────────────────────────────────────────────────────────
+  // ── Confirm ───────────────────────────────────────────────────────────────
   if (phase === 'confirm') {
-    const hasResumable = !!activeSession
-
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 animate-fade-in-up">
         <div className="flex items-center gap-3">
           <button onClick={() => router.back()} className="btn btn-circle btn-sm btn-ghost border border-base-300">‹</button>
           <Breadcrumb crumbs={[
@@ -288,37 +267,27 @@ export default function TrialPage({
           <h2 className="text-2xl font-bold">{subject}</h2>
           <p className="text-base-content/60">{DIFFICULTY_LABEL[difficulty] ?? difficulty} Trial</p>
 
-          {hasResumable ? (
+          {activeSession ? (
             <>
-              {/* Resume prompt */}
               <div className="w-full bg-base-100 rounded-xl p-4 flex flex-col gap-1 border border-base-300">
                 <p className="font-semibold text-sm">Unfinished trial detected</p>
                 <p className="text-xs text-base-content/60">
-                  You started this trial earlier.{activeSession.checkpoint ? ' Your progress was saved.' : ' No saved progress — you\'ll start from the beginning.'}
+                  {activeSession.checkpoint ? 'Your progress was saved.' : "No saved progress — you'll start from the beginning."}
                 </p>
               </div>
-
               {error && <div className="alert alert-error py-2 text-sm w-full"><span>{error}</span></div>}
-
-              <button onClick={resumeExam} className="btn btn-primary btn-lg w-full">
-                Resume Trial
-              </button>
+              <button onClick={resumeExam} className="btn btn-primary btn-lg w-full">Resume Trial</button>
               <div className="divider text-xs text-base-content/40 my-0">or</div>
               <div className="w-full flex flex-col gap-2">
-                <button onClick={startExam} className="btn btn-outline w-full">
-                  Start New Trial
-                </button>
+                <button onClick={startExam} className="btn btn-outline w-full">Start New Trial</button>
                 <p className="text-xs text-center text-base-content/50">
                   This will abandon the unfinished trial and spend {gemCost ?? '…'} gem{gemCost !== 1 ? 's' : ''}.
                 </p>
               </div>
-              <button onClick={() => router.back()} className="btn btn-ghost w-full btn-sm">
-                Cancel
-              </button>
+              <button onClick={() => router.back()} className="btn btn-ghost w-full btn-sm">Cancel</button>
             </>
           ) : (
             <>
-              {/* Normal start */}
               <div className="flex items-center gap-3 bg-base-100 rounded-xl px-6 py-4">
                 <Image src="/icons/blue-gem.png" alt="Blue gem" width={32} height={32} />
                 <div>
@@ -326,15 +295,9 @@ export default function TrialPage({
                   <p className="text-xl font-bold">{gemCost ?? '…'} Blue Gem{gemCost !== 1 ? 's' : ''}</p>
                 </div>
               </div>
-
               {error && <div className="alert alert-error py-2 text-sm w-full"><span>{error}</span></div>}
-
-              <button onClick={startExam} className="btn btn-neutral btn-lg w-full">
-                Start Trial
-              </button>
-              <button onClick={() => router.back()} className="btn btn-ghost w-full">
-                Cancel
-              </button>
+              <button onClick={startExam} className="btn btn-neutral btn-lg w-full">Start Trial</button>
+              <button onClick={() => router.back()} className="btn btn-ghost w-full">Cancel</button>
             </>
           )}
         </div>
@@ -342,86 +305,140 @@ export default function TrialPage({
     )
   }
 
-  // ── Loading / Submitting ───────────────────────────────────────────────────
+  // ── Loading / Submitting ──────────────────────────────────────────────────
   if (phase === 'loading' || phase === 'submitting') {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <span className="loading loading-spinner loading-lg" />
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+        <span className="loading loading-ring loading-lg text-primary" />
+        <p className="text-sm text-base-content/50 animate-pulse">
+          {phase === 'submitting' ? 'Submitting your answers…' : 'Loading trial…'}
+        </p>
       </div>
     )
   }
 
-  // ── Exam ───────────────────────────────────────────────────────────────────
+  // ── Exam ──────────────────────────────────────────────────────────────────
   if (!currentQ) return null
 
-  const timePct = (timeLeft / TIME_PER_Q) * 100
-  const timeColor = timeLeft <= 15 ? 'progress-error' : 'progress-warning'
-  const mm = String(Math.floor(timeLeft / 60)).padStart(2, '0')
-  const ss = String(timeLeft % 60).padStart(2, '0')
+  const mmNum = Math.floor(timeLeft / 60)
+  const ssNum = timeLeft % 60
+  const timerColor =
+    timeLeft <= 10 ? 'text-error' :
+    timeLeft <= 30 ? 'text-warning' :
+    'text-base-content'
+  const timerPulse = timeLeft <= 10 ? 'animate-pulse' : ''
 
   return (
-    <div className="flex flex-col gap-4 pb-4">
-      {/* Question text */}
-      <div className="pt-2 text-base leading-relaxed">
-        <p>{currentQ.question ?? currentQ.question_text ?? ''}</p>
+    <div className="flex flex-col gap-3 pb-4">
+      {/* ── Timer + progress bar ── */}
+      <div className="rounded-2xl bg-base-200 px-4 py-3 flex items-center justify-between shadow-sm">
+        {/* Countdown display */}
+        <div className={`flex items-center gap-0.5 font-mono font-black text-2xl ${timerColor} ${timerPulse}`}>
+          <span className="countdown">
+            <span style={{ '--value': mmNum } as React.CSSProperties} />
+          </span>
+          <span className="mb-0.5">:</span>
+          <span className="countdown">
+            <span style={{ '--value': ssNum } as React.CSSProperties} />
+          </span>
+        </div>
+
+        {/* Q counter */}
+        <span className="text-sm font-semibold text-base-content/60">
+          Q {currentIdx + 1} <span className="text-base-content/30">/ {total}</span>
+        </span>
+
+        {/* Save & exit */}
+        <button
+          onClick={() => { saveCheckpoint(); router.back() }}
+          className="btn btn-ghost btn-xs gap-1 text-base-content/40"
+        >
+          ‹ Exit
+        </button>
       </div>
 
-      {/* Answer options */}
-      <div className="card bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
-        {Object.entries(currentQ.options).map(([key, value]) => (
-          <button
-            key={key}
-            onClick={() => {
-              if (selected) return
-              setSelected(key)
-              setTimeout(() => handleNext(key), 600)
-            }}
-            className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-colors ${
-              selected === key
-                ? 'border-primary bg-primary text-primary-content'
-                : selected
-                ? 'border-base-300 bg-base-100 opacity-50'
-                : 'border-base-300 bg-base-100 hover:bg-base-200'
+      {/* Answer tracker dots */}
+      <div className="flex gap-1.5 justify-center flex-wrap px-1">
+        {questions.map((q, i) => (
+          <div
+            key={q.question_id}
+            className={`rounded-full transition-all duration-300 ${
+              i === currentIdx
+                ? 'w-3 h-3 bg-primary ring-2 ring-primary ring-offset-1'
+                : answers[q.question_id]
+                ? 'w-2 h-2 bg-primary/50'
+                : 'w-2 h-2 bg-base-300'
             }`}
-          >
-            <span className="font-bold w-6 shrink-0">{key}.</span>
-            <span>{value}</span>
-          </button>
+          />
         ))}
       </div>
 
-      {/* Timer + navigation */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between text-sm">
-          <button
-            onClick={() => { saveCheckpoint(); router.back() }}
-            className="btn btn-ghost btn-sm gap-1"
-          >
-            ‹ Save & Exit
-          </button>
-          <div className="flex flex-col items-center">
-            <span className="font-bold">{mm}:{ss}</span>
-            <progress className={`progress ${timeColor} w-32 h-2`} value={timePct} max={100} />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-base-content/50">Q {currentIdx + 1}/{total}</span>
-            <button onClick={() => handleNext()} className="btn btn-ghost btn-sm">
-              {currentIdx + 1 === total ? 'Finish' : 'Skip ›'}
-            </button>
-          </div>
-        </div>
+      {/* Question card */}
+      <div
+        key={`q-${currentIdx}`}
+        className="card bg-base-200 rounded-2xl p-5 shadow-sm animate-fade-in-right"
+      >
+        <p className="text-base leading-relaxed font-medium">
+          <QuestionRenderer text={currentQ.question ?? currentQ.question_text ?? ''} />
+        </p>
       </div>
 
-      {/* Topic hint */}
-      {currentQ.meta.topic && (
-        <div className="text-xs text-base-content/50 flex gap-1 items-start">
-          <span>💡</span>
-          <span>{currentQ.meta.topic}{currentQ.meta.subtopic ? ` · ${currentQ.meta.subtopic}` : ''}</span>
+      {/* Answer options */}
+      <div className="flex flex-col gap-2.5">
+        {Object.entries(currentQ.options).map(([key, value]) => {
+          const isSelected = selected === key || flashSelected === key
+          const isOther = (selected !== null || flashSelected !== null) && !isSelected
+          return (
+            <button
+              key={key}
+              onClick={() => {
+                if (selected || flashSelected) return
+                soundSelect()
+                haptic(HAPTIC_SELECT)
+                setFlashSelected(key)
+                setSelected(key)
+                setTimeout(() => handleNext(key), 600)
+              }}
+              className={`flex items-center gap-3 p-3.5 rounded-xl border-2 text-left
+                transition-all duration-150 active:scale-95
+                ${isSelected
+                  ? 'border-primary bg-primary text-primary-content font-semibold scale-[1.01]'
+                  : isOther
+                  ? 'border-base-300 bg-base-100 opacity-40'
+                  : 'border-base-300 bg-base-100 hover:bg-base-200 hover:border-base-400'
+                }`}
+            >
+              <span className={`font-bold w-6 shrink-0 text-sm ${isSelected ? 'text-primary-content' : ''}`}>
+                {key}.
+              </span>
+              <span className="text-sm leading-snug">
+                <QuestionRenderer text={value} />
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Tip hint */}
+      {currentQ.tip && (
+        <div className="collapse collapse-arrow bg-base-200 rounded-xl">
+          <input type="checkbox" />
+          <div className="collapse-title text-sm py-2 min-h-0 font-medium">💡 Need a hint?</div>
+          <div className="collapse-content text-sm text-base-content/70 leading-relaxed">
+            {currentQ.tip}
+          </div>
         </div>
       )}
 
-      {/* Footer */}
-      <div className="border-t border-base-200 pt-3 mt-2">
+      {/* Skip */}
+      <div className="flex justify-end">
+        <button onClick={() => handleNext()} className="btn btn-ghost btn-sm text-base-content/40">
+          {currentIdx + 1 === total ? 'Finish ›' : 'Skip ›'}
+        </button>
+      </div>
+
+      {/* Footer breadcrumb */}
+      <div className="border-t border-base-200 pt-3 mt-1">
         <p className="font-semibold text-sm">{subject}</p>
         <Breadcrumb crumbs={[
           { label: 'Home', href: '/child/home' },

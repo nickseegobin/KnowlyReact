@@ -2,7 +2,6 @@
 
 import { use, useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Image from 'next/image'
 import Link from 'next/link'
 import Breadcrumb from '@/components/child/Breadcrumb'
 
@@ -22,12 +21,15 @@ interface ExamPackage {
 
 interface Session {
   session_id: number | string
-  external_session_id?: string
-  balance_after: number
   package: ExamPackage
 }
 
-const DIFFICULTY_COST: Record<string, number> = { easy: 1, medium: 1, hard: 1 }
+interface AssignedTask {
+  id: number
+  scope?: string | null
+  module_numbers?: number[] | null
+}
+
 const TIME_PER_Q = 90
 
 export default function ClassTrialPage({
@@ -39,19 +41,32 @@ export default function ClassTrialPage({
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const subject = searchParams.get('subject') ?? ''
+  const subject    = searchParams.get('subject')    ?? ''
   const difficulty = searchParams.get('difficulty') ?? 'easy'
-  const title = searchParams.get('title') ?? subject
-  const gemReward = parseInt(searchParams.get('reward') ?? '0', 10)
+  const title      = searchParams.get('title')      ?? subject
 
-  const [phase, setPhase] = useState<'confirm' | 'loading' | 'exam' | 'submitting'>('confirm')
-  const [session, setSession] = useState<Session | null>(null)
+  // Fetch the task to get scope + module_numbers
+  const [task, setTask] = useState<AssignedTask | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/classes/${class_id}/my-tasks`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const tasks: AssignedTask[] = data?.tasks ?? []
+        const match = tasks.find(t => t.id === parseInt(task_id))
+        if (match) setTask(match)
+      })
+      .catch(() => {})
+  }, [class_id, task_id])
+
+  const [phase, setPhase]       = useState<'confirm' | 'loading' | 'exam' | 'submitting'>('confirm')
+  const [session, setSession]   = useState<Session | null>(null)
   const [currentIdx, setCurrentIdx] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, string>>({})
-  const [timings, setTimings] = useState<Record<string, number>>({})
+  const [answers, setAnswers]   = useState<Record<string, string>>({})
+  const [timings, setTimings]   = useState<Record<string, number>>({})
   const [selected, setSelected] = useState<string | null>(null)
   const [timeLeft, setTimeLeft] = useState(TIME_PER_Q)
-  const [error, setError] = useState('')
+  const [error, setError]       = useState('')
 
   // Timer
   useEffect(() => {
@@ -63,17 +78,24 @@ export default function ClassTrialPage({
   }, [phase, timeLeft, currentIdx])
 
   const questions = session?.package.questions ?? []
-  const total = questions.length
-  const currentQ = questions[currentIdx]
+  const total     = questions.length
+  const currentQ  = questions[currentIdx]
 
   async function startExam() {
     setPhase('loading')
     setError('')
     try {
       const res = await fetch('/api/exams/start', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, difficulty, source: 'teacher_assigned', task_id: parseInt(task_id) }),
+        body: JSON.stringify({
+          subject,
+          difficulty,
+          source:         'teacher_assigned',
+          task_id:        parseInt(task_id),
+          scope:          task?.scope          ?? 'period',
+          module_numbers: task?.module_numbers ?? [],
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.message ?? 'Failed to start trial'); setPhase('confirm'); return }
@@ -88,20 +110,19 @@ export default function ClassTrialPage({
 
   const handleNext = useCallback((overrideAnswer?: string) => {
     if (!currentQ) return
-    const ans = overrideAnswer !== undefined ? overrideAnswer : (selected ?? '')
+    const ans   = overrideAnswer !== undefined ? overrideAnswer : (selected ?? '')
     const spent = TIME_PER_Q - timeLeft
-    setAnswers((prev) => ({ ...prev, [currentQ.question_id]: ans }))
-    setTimings((prev) => ({ ...prev, [currentQ.question_id]: spent }))
+    const newAnswers = { ...answers, [currentQ.question_id]: ans }
+    const newTimings = { ...timings, [currentQ.question_id]: spent }
+    setAnswers(newAnswers)
+    setTimings(newTimings)
     setSelected(null)
     setTimeLeft(TIME_PER_Q)
 
     if (currentIdx + 1 < total) {
       setCurrentIdx((i) => i + 1)
     } else {
-      submitExam(
-        { ...answers, [currentQ.question_id]: ans },
-        { ...timings, [currentQ.question_id]: spent }
-      )
+      submitExam(newAnswers, newTimings)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIdx, total, selected, currentQ, answers, timings, timeLeft])
@@ -111,19 +132,19 @@ export default function ClassTrialPage({
     setPhase('submitting')
 
     const payload = questions.map((q) => ({
-      question_id: q.question_id,
-      selected_answer: finalAnswers[q.question_id] ?? '',
-      correct_answer: '',
-      is_correct: false,
-      topic: q.meta.topic,
-      subtopic: q.meta.subtopic ?? '',
-      cognitive_level: q.meta.cognitive_level,
+      question_id:        q.question_id,
+      selected_answer:    finalAnswers[q.question_id] ?? '',
+      correct_answer:     '',
+      is_correct:         false,
+      topic:              q.meta.topic,
+      subtopic:           q.meta.subtopic ?? '',
+      cognitive_level:    q.meta.cognitive_level,
       time_taken_seconds: finalTimings[q.question_id] ?? 0,
     }))
 
     try {
       const res = await fetch(`/api/exams/${session.session_id}/submit`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers: payload }),
       })
@@ -136,7 +157,6 @@ export default function ClassTrialPage({
         difficulty,
         task_id,
         class_id,
-        gem_reward: gemReward,
       }))
       router.push(`/child/classes/${class_id}/trial/${task_id}/results`)
     } catch {
@@ -145,38 +165,44 @@ export default function ClassTrialPage({
     }
   }
 
-  // ── Confirm screen ─────────────────────────────────────────────────────────
+  // ── Confirm screen ────────────────────────────────────────────────────────
   if (phase === 'confirm') {
+    const scopeLabel = task?.scope === 'general_topic' && task.module_numbers?.length
+      ? task.module_numbers.length === 1
+        ? 'Single Topic Trial'
+        : `Multi-Topic Trial — ${task.module_numbers.length} topics`
+      : 'General Trial — All Topics'
+
     return (
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <Link href={`/child/classes/${class_id}`} className="btn btn-circle btn-sm btn-ghost border border-base-300">‹</Link>
           <Breadcrumb crumbs={[
-            { label: 'Home', href: '/child/home' },
+            { label: 'Home',    href: '/child/home' },
             { label: 'Classes', href: '/child/classes' },
-            { label: 'Class', href: `/child/classes/${class_id}` },
+            { label: 'Class',   href: `/child/classes/${class_id}` },
             { label: 'Trial' },
           ]} />
         </div>
 
-        <div className="card bg-base-200 rounded-2xl p-6 flex flex-col items-center gap-6 mt-4">
-          <h2 className="text-2xl font-bold text-center">{title}</h2>
-          {subject && title !== subject && <p className="text-base-content/60">{subject} · {difficulty}</p>}
-
-          <div className="flex items-center gap-3 bg-base-100 rounded-xl px-6 py-4">
-            <Image src="/icons/blue-gem.png" alt="Blue gem" width={32} height={32} />
-            <div>
-              <p className="text-sm text-base-content/60">Cost</p>
-              <p className="text-xl font-bold">{DIFFICULTY_COST[difficulty] ?? 1} Blue Gem</p>
-            </div>
+        <div className="card bg-base-200 rounded-2xl p-6 flex flex-col items-center gap-5 mt-2">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold">{title}</h2>
+            {subject && title !== subject && (
+              <p className="text-base-content/60 text-sm capitalize">{subject} · {difficulty}</p>
+            )}
           </div>
 
-          {gemReward > 0 && (
-            <div className="flex items-center gap-2 text-sm text-success font-semibold">
-              <Image src="/icons/blue-gem.png" alt="reward" width={18} height={18} />
-              +{gemReward} gem reward on completion
-            </div>
-          )}
+          <div className="w-full text-center">
+            <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-1">Trial Type</p>
+            <p className="text-sm font-medium">{scopeLabel}</p>
+          </div>
+
+          <div className="divider my-0" />
+
+          <div className="w-full bg-base-100 rounded-xl px-4 py-3 text-center">
+            <p className="text-xs text-base-content/50">Teacher assigned — no gems required</p>
+          </div>
 
           {error && <div className="alert alert-error py-2 text-sm w-full"><span>{error}</span></div>}
 
@@ -191,19 +217,22 @@ export default function ClassTrialPage({
     )
   }
 
-  // ── Loading ────────────────────────────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (phase === 'loading' || phase === 'submitting') {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <span className="loading loading-spinner loading-lg" />
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+        <span className="loading loading-ring loading-lg text-primary" />
+        <p className="text-sm text-base-content/50 animate-pulse">
+          {phase === 'submitting' ? 'Submitting your answers…' : 'Loading trial…'}
+        </p>
       </div>
     )
   }
 
-  // ── Exam ───────────────────────────────────────────────────────────────────
+  // ── Exam ──────────────────────────────────────────────────────────────────
   if (!currentQ) return null
 
-  const timePct = (timeLeft / TIME_PER_Q) * 100
+  const timePct  = (timeLeft / TIME_PER_Q) * 100
   const timeColor = timeLeft <= 15 ? 'progress-error' : 'progress-warning'
   const mm = String(Math.floor(timeLeft / 60)).padStart(2, '0')
   const ss = String(timeLeft % 60).padStart(2, '0')
@@ -237,37 +266,13 @@ export default function ClassTrialPage({
         ))}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between text-sm">
-          <Link href={`/child/classes/${class_id}`} className="btn btn-ghost btn-sm gap-1">‹ Back</Link>
-          <div className="flex flex-col items-center">
-            <span className="font-bold">{mm}:{ss}</span>
-            <progress className={`progress ${timeColor} w-32 h-2`} value={timePct} max={100} />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-base-content/50">Q {currentIdx + 1}/{total}</span>
-            <button onClick={() => handleNext()} className="btn btn-ghost btn-sm">
-              {currentIdx + 1 === total ? 'Finish' : 'Skip ›'}
-            </button>
-          </div>
+      <div className="flex items-center justify-between text-sm px-1">
+        <Link href={`/child/classes/${class_id}`} className="btn btn-ghost btn-sm">‹ Back</Link>
+        <div className="flex flex-col items-center gap-1">
+          <span className="font-mono font-bold">{mm}:{ss}</span>
+          <progress className={`progress ${timeColor} w-28 h-1.5`} value={timePct} max={100} />
         </div>
-      </div>
-
-      {currentQ.meta.topic && (
-        <div className="text-xs text-base-content/50 flex gap-1 items-start">
-          <span>💡</span>
-          <span>{currentQ.meta.topic}{currentQ.meta.subtopic ? ` · ${currentQ.meta.subtopic}` : ''}</span>
-        </div>
-      )}
-
-      <div className="border-t border-base-200 pt-3 mt-2">
-        <p className="font-semibold text-sm">{title}</p>
-        <Breadcrumb crumbs={[
-          { label: 'Home', href: '/child/home' },
-          { label: 'Classes', href: '/child/classes' },
-          { label: 'Class', href: `/child/classes/${class_id}` },
-          { label: 'Trial' },
-        ]} />
+        <span className="text-base-content/40 text-xs">Q {currentIdx + 1}/{total}</span>
       </div>
     </div>
   )

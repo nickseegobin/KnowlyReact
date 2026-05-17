@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -133,8 +132,6 @@ function Sparkline({ trend }: { trend: TrendPoint[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ParentAnalyticsPage() {
-  const router = useRouter()
-
   const [children, setChildren]   = useState<(ChildAnalytics & { nickname: string; avatar_index: number })[]>([])
   const [data, setData]           = useState<ChildAnalytics | null>(null)
   const [activeIdx, setActiveIdx] = useState(0)
@@ -174,7 +171,6 @@ export default function ParentAnalyticsPage() {
       <div className="max-w-sm mx-auto px-4 py-12 flex flex-col items-center gap-4 text-center">
         <div className="text-5xl">📊</div>
         <p className="text-base-content/60">{error || 'No activity yet.'}</p>
-        <button onClick={() => router.back()} className="btn btn-ghost btn-sm">← Back</button>
       </div>
     )
   }
@@ -183,15 +179,12 @@ export default function ParentAnalyticsPage() {
   const name   = data.nickname || `Child #${data.user_id}`
 
   return (
-    <div className="max-w-sm mx-auto w-full px-4 py-6 flex flex-col gap-5 animate-fade-in-up">
+    <div className="flex flex-col gap-5 max-w-2xl mx-auto w-full">
 
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="btn btn-circle btn-sm btn-ghost border border-base-300">‹</button>
-        <div>
-          <h1 className="text-xl font-bold">Progress Report</h1>
-          <p className="text-sm text-base-content/50">How your child is doing</p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold">Progress Report</h1>
+        <p className="text-sm text-base-content/50">How your child is doing</p>
       </div>
 
       {/* Multi-child switcher */}
@@ -225,117 +218,147 @@ export default function ParentAnalyticsPage() {
       </div>
 
       {/* Activity summary */}
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { val: data.weekly_trials, label: 'This week', unit: 'trial' },
-          { val: data.trial_count,   label: 'All time',  unit: 'trial' },
-          { val: data.quest_count,   label: 'Quests',    unit: 'done' },
-        ].map(({ val, label, unit }) => (
-          <div key={label} className="bg-base-200 rounded-2xl p-3 flex flex-col items-center gap-0.5 text-center">
-            <span className="text-2xl font-black">{val}</span>
-            <span className="text-[10px] text-base-content/60 leading-tight">{label}<br />{unit}{val !== 1 && unit !== 'done' ? 's' : ''}</span>
-          </div>
-        ))}
+      <div className="flex gap-0 text-center rounded-2xl bg-base-200 overflow-hidden">
+        <div className="flex-1 py-4">
+          <p className="text-2xl font-bold">{data.weekly_trials}</p>
+          <p className="text-xs text-base-content/50 mt-0.5">This Week</p>
+        </div>
+        <div className="w-px bg-base-300" />
+        <div className="flex-1 py-4">
+          <p className="text-2xl font-bold">{data.trial_count}</p>
+          <p className="text-xs text-base-content/50 mt-0.5">Trials</p>
+        </div>
+        <div className="w-px bg-base-300" />
+        <div className="flex-1 py-4">
+          <p className="text-2xl font-bold">{data.quest_count}</p>
+          <p className="text-xs text-base-content/50 mt-0.5">Quests</p>
+        </div>
       </div>
 
-      {/* 4-week trend */}
+      {/* Score Trend */}
       {data.trend.length > 0 && (
-        <div className="bg-base-200 rounded-2xl p-4">
-          <p className="font-bold text-sm mb-3">Score Trend</p>
-          <Sparkline trend={data.trend} />
-        </div>
+        <>
+          <div className="flex items-center gap-3">
+            <p className="font-semibold text-base">Score Trend</p>
+            <div className="flex-1 h-px bg-base-200" />
+          </div>
+          <div className="bg-base-200 rounded-2xl p-4">
+            <Sparkline trend={data.trend} />
+          </div>
+        </>
       )}
 
       {/* Per-subject */}
       {data.subjects.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <p className="font-bold text-sm">By Subject</p>
-          {data.subjects.map((s) => (
-            <div key={s.subject} className="bg-base-200 rounded-2xl p-4 flex items-center gap-3">
-              <span className="text-2xl shrink-0">{SUBJECT_EMOJI[s.subject] ?? '📚'}</span>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{s.subject}</p>
-                <p className="text-xs text-base-content/50">
-                  {s.trial_count} trial{s.trial_count !== 1 ? 's' : ''}
-                  {s.topics_weak > 0 && (
-                    <span className="text-error"> · {s.topics_weak} topic{s.topics_weak !== 1 ? 's' : ''} need work</span>
-                  )}
-                </p>
+        <>
+          <div className="flex items-center gap-3">
+            <p className="font-semibold text-base">By Subject</p>
+            <div className="flex-1 h-px bg-base-200" />
+          </div>
+          <div className="flex flex-col gap-2">
+            {data.subjects.map((s) => (
+              <div key={s.subject} className="bg-base-200 rounded-2xl p-4 flex items-center gap-3">
+                <span className="text-2xl shrink-0">{SUBJECT_EMOJI[s.subject] ?? '📚'}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{s.subject}</p>
+                  <p className="text-xs text-base-content/50">
+                    {s.trial_count} trial{s.trial_count !== 1 ? 's' : ''}
+                    {s.topics_weak > 0 && (
+                      <span className="text-error"> · {s.topics_weak} topic{s.topics_weak !== 1 ? 's' : ''} need work</span>
+                    )}
+                  </p>
+                </div>
+                <span className={`text-lg font-black shrink-0 ${scoreColor(s.avg_score)}`}>{fmt(s.avg_score)}</span>
               </div>
-              <span className={`text-lg font-black shrink-0 ${scoreColor(s.avg_score)}`}>{fmt(s.avg_score)}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Strengths & Weaknesses */}
       {(data.strengths.length > 0 || data.weaknesses.length > 0) && (
-        <div className="grid grid-cols-2 gap-3">
-          {data.strengths.length > 0 && (
-            <div className="bg-base-200 rounded-2xl p-3 flex flex-col gap-2">
-              <p className="text-xs font-bold text-success">Strengths ✓</p>
-              {data.strengths.slice(0, 5).map((t, i) => (
-                <div key={i} className="flex items-start justify-between gap-1">
-                  <p className="text-xs text-base-content/70 leading-snug flex-1 truncate">{t.topic}</p>
-                  <span className="text-xs font-bold text-success shrink-0">{fmt(t.correct_rate)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {data.weaknesses.length > 0 && (
-            <div className="bg-base-200 rounded-2xl p-3 flex flex-col gap-2">
-              <p className="text-xs font-bold text-error">Needs Work ✗</p>
-              {data.weaknesses.slice(0, 5).map((t, i) => (
-                <div key={i} className="flex items-start justify-between gap-1">
-                  <p className="text-xs text-base-content/70 leading-snug flex-1 truncate">{t.topic}</p>
-                  <span className="text-xs font-bold text-error shrink-0">{fmt(t.correct_rate)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <>
+          <div className="flex items-center gap-3">
+            <p className="font-semibold text-base">Strengths &amp; Weaknesses</p>
+            <div className="flex-1 h-px bg-base-200" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {data.strengths.length > 0 && (
+              <div className="bg-base-200 rounded-2xl p-3 flex flex-col gap-2">
+                <p className="text-sm font-semibold text-success">Strengths ✓</p>
+                {data.strengths.slice(0, 5).map((t, i) => (
+                  <div key={i} className="flex items-start justify-between gap-1">
+                    <p className="text-xs text-base-content/70 leading-snug flex-1 truncate">{t.topic}</p>
+                    <span className="text-xs font-bold text-success shrink-0">{fmt(t.correct_rate)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {data.weaknesses.length > 0 && (
+              <div className="bg-base-200 rounded-2xl p-3 flex flex-col gap-2">
+                <p className="text-sm font-semibold text-error">Needs Work ✗</p>
+                {data.weaknesses.slice(0, 5).map((t, i) => (
+                  <div key={i} className="flex items-start justify-between gap-1">
+                    <p className="text-xs text-base-content/70 leading-snug flex-1 truncate">{t.topic}</p>
+                    <span className="text-xs font-bold text-error shrink-0">{fmt(t.correct_rate)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Improvement tracker */}
       {data.retry_effectiveness.length > 0 && (
-        <div className="bg-base-200 rounded-2xl p-4">
-          <p className="font-bold text-sm mb-3">Showing Improvement 📈</p>
-          <div className="flex flex-col gap-3">
-            {data.retry_effectiveness.slice(0, 3).map((r, i) => (
-              <div key={i}>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-base-content/70 truncate flex-1 pr-2">{r.topic}</span>
-                  <span className={`font-semibold shrink-0 ${r.improvement > 0 ? 'text-success' : 'text-base-content/50'}`}>
-                    {r.improvement > 0 ? `+${r.improvement}%` : `${r.improvement}%`}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-base-content/50">
-                  <span>First: <b className="text-base-content/70">{Math.round(r.first_attempt)}%</b></span>
-                  <span>→</span>
-                  <span>Now: <b className={r.improvement > 0 ? 'text-success' : 'text-base-content/70'}>{r.subsequent_avg}%</b></span>
-                </div>
-              </div>
-            ))}
+        <>
+          <div className="flex items-center gap-3">
+            <p className="font-semibold text-base">Showing Improvement</p>
+            <div className="flex-1 h-px bg-base-200" />
           </div>
-        </div>
+          <div className="bg-base-200 rounded-2xl p-4">
+            <div className="flex flex-col gap-3">
+              {data.retry_effectiveness.slice(0, 3).map((r, i) => (
+                <div key={i}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-base-content/70 truncate flex-1 pr-2">{r.topic}</span>
+                    <span className={`font-semibold shrink-0 ${r.improvement > 0 ? 'text-success' : 'text-base-content/50'}`}>
+                      {r.improvement > 0 ? `+${r.improvement}%` : `${r.improvement}%`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-base-content/50">
+                    <span>First: <b className="text-base-content/70">{Math.round(r.first_attempt)}%</b></span>
+                    <span>→</span>
+                    <span>Now: <b className={r.improvement > 0 ? 'text-success' : 'text-base-content/70'}>{r.subsequent_avg}%</b></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Recent activity */}
       {data.recent_trials.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <p className="font-bold text-sm">Recent Trials</p>
-          {data.recent_trials.slice(0, 5).map((t, i) => (
-            <div key={i} className="bg-base-200 rounded-xl px-4 py-3 flex items-center justify-between">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{t.subject}</p>
-                <p className="text-xs text-base-content/50">
-                  {t.topic ? `${t.topic} · ` : ''}{DIFFICULTY_LABEL[t.difficulty] ?? t.difficulty} · {relativeDate(t.completed_at)}
-                </p>
+        <>
+          <div className="flex items-center gap-3">
+            <p className="font-semibold text-base">Recent Trials</p>
+            <div className="flex-1 h-px bg-base-200" />
+          </div>
+          <div className="flex flex-col gap-2">
+            {data.recent_trials.slice(0, 5).map((t, i) => (
+              <div key={i} className="bg-base-200 rounded-2xl p-4 flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{t.subject}</p>
+                  <p className="text-xs text-base-content/50">
+                    {t.topic ? `${t.topic} · ` : ''}{DIFFICULTY_LABEL[t.difficulty] ?? t.difficulty} · {relativeDate(t.completed_at)}
+                  </p>
+                </div>
+                <span className={`text-sm font-bold shrink-0 ml-3 ${scoreColor(t.percentage)}`}>{fmt(t.percentage)}</span>
               </div>
-              <span className={`text-sm font-bold shrink-0 ml-3 ${scoreColor(t.percentage)}`}>{fmt(t.percentage)}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {data.trial_count === 0 && data.quest_count === 0 && (
@@ -343,8 +366,6 @@ export default function ParentAnalyticsPage() {
           No activity yet. Encourage your child to start a Quest or Trial!
         </div>
       )}
-
-      <div className="pb-6" />
     </div>
   )
 }

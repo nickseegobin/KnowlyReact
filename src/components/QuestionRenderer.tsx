@@ -37,6 +37,17 @@ function Blank() {
   )
 }
 
+// ── Math box (□) component — renders as a styled unknown placeholder ──────────
+
+function MathBox() {
+  return (
+    <span
+      className="inline-flex items-center justify-center w-6 h-6 border-2 border-current rounded-sm mx-0.5 align-middle text-xs font-bold"
+      aria-label="unknown value"
+    />
+  )
+}
+
 // ── Parser ────────────────────────────────────────────────────────────────────
 
 const TAG_REGEX = /(\[emphasize\][\s\S]*?\[\/emphasize\]|\[hide\][\s\S]*?\[\/hide\]|\[blank\])/g
@@ -56,14 +67,22 @@ function renderSegment(part: string, key: number): React.ReactNode {
     return <Blank key={key} />
   }
 
-  // Plain text — split on newlines so \n renders as <br />
+  // Plain text — split on newlines and replace □ with styled math boxes
   const lines = part.split('\n')
-  return lines.map((line, i) => (
-    <span key={`${key}-${i}`}>
-      {line}
-      {i < lines.length - 1 && <br />}
-    </span>
-  ))
+  return lines.map((line, i) => {
+    const segments = line.split('□')
+    return (
+      <span key={`${key}-${i}`}>
+        {segments.map((seg, j) => (
+          <span key={j}>
+            {seg}
+            {j < segments.length - 1 && <MathBox />}
+          </span>
+        ))}
+        {i < lines.length - 1 && <br />}
+      </span>
+    )
+  })
 }
 
 // ── Public component ──────────────────────────────────────────────────────────

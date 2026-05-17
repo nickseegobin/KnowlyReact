@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Breadcrumb from '@/components/child/Breadcrumb'
 import Link from 'next/link'
 import { confettiCelebration, confettiCompletion } from '@/lib/confetti'
+import QuestionRenderer from '@/components/QuestionRenderer'
 
 interface TopicBreakdown {
   topic: string
@@ -21,6 +22,23 @@ interface LeaderboardUpdate {
   previous_rank: number | null
 }
 
+interface AnswerReview {
+  question_id: string
+  selected_answer: string
+  correct_answer: string
+  is_correct: boolean
+  explanation: string
+}
+
+interface StoredQuestion {
+  question_id: string
+  question?: string
+  question_text?: string
+  tip?: string
+  options: Record<string, string>
+  meta?: { topic?: string }
+}
+
 interface TrialResult {
   session_id: number
   score: number
@@ -32,6 +50,7 @@ interface TrialResult {
   subject: string
   difficulty: string
   performance_review?: string
+  answer_sheet?: AnswerReview[]
 }
 
 function formatTime(secs: number) {
@@ -81,6 +100,7 @@ export default function ResultsPage({
   const router = useRouter()
 
   const [result, setResult] = useState<TrialResult | null>(null)
+  const [storedQuestions, setStoredQuestions] = useState<StoredQuestion[]>([])
   const [animate, setAnimate] = useState(false)
   const [displayPct, setDisplayPct] = useState(0)
   const confettiFiredRef = useRef(false)
@@ -90,6 +110,8 @@ export default function ResultsPage({
     if (!stored) { router.push('/child/trials'); return }
     try {
       setResult(JSON.parse(stored))
+      const qs = sessionStorage.getItem('trial_questions')
+      if (qs) setStoredQuestions(JSON.parse(qs))
     } catch {
       router.push('/child/trials')
     }
@@ -266,9 +288,69 @@ export default function ResultsPage({
         </div>
       )}
 
+      {/* Question review */}
+      {result.answer_sheet && result.answer_sheet.length > 0 && (
+        <div className="card bg-base-200 rounded-2xl p-4">
+          <p className="font-bold italic mb-3">Question Review</p>
+          <div className="flex flex-col gap-3">
+            {result.answer_sheet.map((ans, i) => {
+              const q = storedQuestions.find((sq) => sq.question_id === ans.question_id)
+              const qText = q?.question ?? q?.question_text ?? `Question ${i + 1}`
+              return (
+                <div
+                  key={ans.question_id}
+                  className={`rounded-xl p-3 border text-sm ${
+                    ans.is_correct
+                      ? 'bg-success/5 border-success/20'
+                      : 'bg-error/5 border-error/20'
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <span className={`font-bold shrink-0 mt-0.5 ${ans.is_correct ? 'text-success' : 'text-error'}`}>
+                      {ans.is_correct ? '✓' : '✗'}
+                    </span>
+                    <p className="font-medium leading-snug flex-1">
+                      <QuestionRenderer text={qText} />
+                    </p>
+                  </div>
+
+                  {!ans.is_correct && (
+                    <div className="text-xs text-base-content/60 mt-1.5 ml-5 flex gap-3 flex-wrap">
+                      <span className="text-error">Your answer: {ans.selected_answer}</span>
+                      <span className="text-success">Correct: {ans.correct_answer}</span>
+                    </div>
+                  )}
+
+                  {ans.explanation && (
+                    <div className="collapse collapse-arrow bg-base-200 rounded-lg mt-2 ml-5">
+                      <input type="checkbox" />
+                      <div className="collapse-title text-xs py-1.5 min-h-0 font-medium">📝 Explanation</div>
+                      <div className="collapse-content text-xs text-base-content/70 leading-relaxed">
+                        {ans.explanation}
+                      </div>
+                    </div>
+                  )}
+
+                  {q?.tip && (
+                    <div className="collapse collapse-arrow bg-base-200 rounded-lg mt-1 ml-5">
+                      <input type="checkbox" />
+                      <div className="collapse-title text-xs py-1.5 min-h-0 font-medium">💡 Tip</div>
+                      <div className="collapse-content text-xs text-base-content/70 leading-relaxed">
+                        {q.tip}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <button
         onClick={() => {
           sessionStorage.removeItem('trial_result')
+          sessionStorage.removeItem('trial_questions')
           router.push('/child/home')
         }}
         className="btn btn-neutral btn-lg w-full mt-2"

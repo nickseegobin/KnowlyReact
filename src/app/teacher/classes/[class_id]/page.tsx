@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
+import { BarChart2, ChevronRight, Users } from 'lucide-react'
 import { LEVELS } from '@/types/knowly'
 
 interface ClassMember {
@@ -51,7 +53,8 @@ export default function ClassDetailPage() {
   const [cls, setCls] = useState<ClassDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [removing, setRemoving] = useState<number | null>(null)
+  const [removing,       setRemoving]       = useState<number | null>(null)
+  const [removingTask,   setRemovingTask]   = useState<number | null>(null)
 
   const fetchClass = useCallback(async () => {
     setLoading(true)
@@ -72,6 +75,17 @@ export default function ClassDetailPage() {
   }, [classId])
 
   useEffect(() => { fetchClass() }, [fetchClass])
+
+  async function deleteTask(taskId: number) {
+    setRemovingTask(taskId)
+    try {
+      const res = await fetch(`/api/classes/${classId}/tasks/${taskId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setCls((prev) => prev ? { ...prev, tasks: prev.tasks.filter((t) => t.id !== taskId) } : prev)
+      }
+    } catch { /* ignore */ }
+    finally { setRemovingTask(null) }
+  }
 
   async function removeMember(childId: number) {
     setRemoving(childId)
@@ -101,61 +115,55 @@ export default function ClassDetailPage() {
   }
 
   return (
-    <div className="max-w-sm mx-auto w-full px-4 py-6 flex flex-col gap-6">
+    <div className="flex flex-col gap-6 max-w-2xl mx-auto w-full">
       {/* ── Header ── */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.push('/teacher/classes')} className="text-base-content/50 hover:text-base-content">
-          ←
-        </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">{cls.name}</h1>
-          <p className="text-sm text-base-content/50">
-            {levelLabel(cls.level)}
-            {cls.members.length > 0 ? ` · ${cls.members.length} student${cls.members.length !== 1 ? 's' : ''}` : ''}
-          </p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold">{cls.name}</h1>
+        <p className="text-sm text-base-content/60">
+          {levelLabel(cls.level)}
+          {cls.members.length > 0 ? ` · ${cls.members.length} student${cls.members.length !== 1 ? 's' : ''}` : ''}
+        </p>
       </div>
 
       {/* ── Quick actions ── */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="flex gap-3">
         <button
           onClick={() => router.push(`/teacher/classes/${classId}/add-students`)}
-          className="btn btn-sm btn-neutral"
+          className="btn btn-sm btn-primary"
         >
           + Add Students
         </button>
         <button
           onClick={() => router.push(`/teacher/classes/${classId}/assign`)}
-          className="btn btn-sm btn-neutral"
+          className="btn btn-sm btn-outline"
         >
           + Assign Activity
         </button>
       </div>
 
       {/* ── Analytics link ── */}
-      <button
-        onClick={() => router.push(`/teacher/analytics/${classId}`)}
-        className="bg-base-200 hover:bg-base-300 transition-colors rounded-2xl p-4 flex items-center gap-3 text-left"
+      <Link
+        href={`/teacher/analytics/${classId}`}
+        className="bg-base-200 hover:bg-base-300 transition-colors rounded-2xl p-4 flex items-center gap-3"
       >
-        <div className="w-10 h-10 rounded-xl bg-neutral flex items-center justify-center shrink-0">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-content">
-            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-          </svg>
+        <div className="w-10 h-10 rounded-xl bg-info/10 text-info flex items-center justify-center shrink-0">
+          <BarChart2 size={18} />
         </div>
         <div className="flex-1">
           <p className="font-semibold text-sm">Class Analytics</p>
           <p className="text-xs text-base-content/50">View performance and progress</p>
         </div>
-        <span className="text-base-content/30">›</span>
-      </button>
+        <ChevronRight size={18} className="text-base-content/30" />
+      </Link>
 
       {/* ── Members ── */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-base-content/60 uppercase tracking-wide">
-          Students ({cls.members.length})
-        </h2>
+        <div className="flex items-center gap-3">
+          <p className="font-semibold text-base">Students ({cls.members.length})</p>
+          <div className="flex-1 h-px bg-base-200" />
+        </div>
         {cls.members.length === 0 ? (
-          <div className="bg-base-200 rounded-2xl p-6 text-center text-sm text-base-content/50">
+          <div className="py-6 text-center text-sm text-base-content/50">
             No students yet.{' '}
             <button
               onClick={() => router.push(`/teacher/classes/${classId}/add-students`)}
@@ -169,16 +177,19 @@ export default function ClassDetailPage() {
             {cls.members.map((m) => (
               <div
                 key={m.child_id}
-                className="bg-base-200 rounded-xl px-4 py-3 flex items-center justify-between"
+                className="flex items-center gap-3 p-3 rounded-xl bg-base-200"
               >
-                <div>
+                <div className="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center text-xs font-bold shrink-0">
+                  {m.nickname.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">{m.nickname}</p>
                   <p className="text-xs text-base-content/50">{levelLabel(m.level)}</p>
                 </div>
                 <button
                   onClick={() => removeMember(m.child_id)}
                   disabled={removing === m.child_id}
-                  className="text-xs text-error hover:opacity-70 disabled:opacity-40"
+                  className="text-xs text-error hover:opacity-70 disabled:opacity-40 shrink-0"
                 >
                   {removing === m.child_id ? <span className="loading loading-spinner loading-xs" /> : 'Remove'}
                 </button>
@@ -190,11 +201,12 @@ export default function ClassDetailPage() {
 
       {/* ── Tasks ── */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-base-content/60 uppercase tracking-wide">
-          Active Activities ({cls.tasks.length})
-        </h2>
+        <div className="flex items-center gap-3">
+          <p className="font-semibold text-base">Activities ({cls.tasks.length})</p>
+          <div className="flex-1 h-px bg-base-200" />
+        </div>
         {cls.tasks.length === 0 ? (
-          <div className="bg-base-200 rounded-2xl p-6 text-center text-sm text-base-content/50">
+          <div className="py-6 text-center text-sm text-base-content/50">
             No activities assigned.{' '}
             <button
               onClick={() => router.push(`/teacher/classes/${classId}/assign`)}
@@ -206,22 +218,30 @@ export default function ClassDetailPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {cls.tasks.map((task) => (
-              <div key={task.id} className="bg-base-200 rounded-xl px-4 py-3">
+              <div key={task.id} className="bg-base-200 rounded-2xl px-4 py-3">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-semibold text-sm">{task.title}</p>
-                  <span className={`badge badge-sm shrink-0 ${task.type === 'quest' ? 'badge-primary' : 'badge-secondary'}`}>
-                    {task.type}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                  {task.subject && <span className="text-xs text-base-content/50">{subjectLabel(task.subject)}</span>}
-                  {task.difficulty && <span className="text-xs text-base-content/50 capitalize">{task.difficulty}</span>}
-                  {task.gem_reward != null && (
-                    <span className="text-xs text-base-content/50">{task.gem_reward} 💎</span>
-                  )}
-                  {task.due_date && (
-                    <span className="text-xs text-base-content/50">Due {task.due_date}</span>
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-sm">{task.title}</p>
+                      <span className={`badge badge-sm shrink-0 ${task.type === 'quest' ? 'badge-primary' : 'badge-secondary'}`}>
+                        {task.type}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                      {task.subject && <span className="text-xs text-base-content/50">{subjectLabel(task.subject)}</span>}
+                      {task.difficulty && <span className="text-xs text-base-content/50 capitalize">{task.difficulty}</span>}
+                      {task.due_date && (
+                        <span className="text-xs text-base-content/50">Due {task.due_date}</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => deleteTask(task.id)}
+                    disabled={removingTask === task.id}
+                    className="text-xs text-error hover:opacity-70 disabled:opacity-40 shrink-0"
+                  >
+                    {removingTask === task.id ? <span className="loading loading-spinner loading-xs" /> : 'Remove'}
+                  </button>
                 </div>
               </div>
             ))}

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import Link from 'next/link'
 import type { TeacherProfile } from '@/types/knowly'
 import TeacherLayout from '@/components/teacher/TeacherLayout'
 
@@ -98,18 +97,17 @@ export default function TeacherSettingsPage() {
 
   return (
     <TeacherLayout user={{ ...user, avatar_index: avatarIndex }}>
-      <div className="max-w-sm mx-auto w-full px-4 py-6 flex flex-col gap-6">
-        {/* Back */}
-        <Link href="/teacher-profile" className="text-sm text-base-content/50 hover:text-base-content flex items-center gap-1">
-          ← Back
-        </Link>
+      <div className="flex flex-col gap-6 max-w-2xl mx-auto w-full">
 
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <h1 className="text-3xl font-bold">Settings</h1>
 
-        <form onSubmit={handleSave} className="flex flex-col gap-5">
+        <form onSubmit={handleSave} className="flex flex-col gap-6">
           {/* ── Avatar picker ── */}
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold">Avatar</p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <p className="font-semibold text-base">Avatar</p>
+              <div className="flex-1 h-px bg-base-200" />
+            </div>
             <div className="grid grid-cols-5 gap-2">
               {Array.from({ length: AVATAR_COUNT }, (_, i) => i + 1).map((n) => (
                 <button
@@ -117,7 +115,7 @@ export default function TeacherSettingsPage() {
                   type="button"
                   onClick={() => setAvatarIndex(n)}
                   className={`rounded-full overflow-hidden border-4 transition-colors ${
-                    avatarIndex === n ? 'border-neutral' : 'border-base-300 hover:border-base-content/30'
+                    avatarIndex === n ? 'border-primary' : 'border-base-300 hover:border-base-content/30'
                   }`}
                 >
                   <Image
@@ -134,7 +132,10 @@ export default function TeacherSettingsPage() {
 
           {/* ── Personal info ── */}
           <div className="flex flex-col gap-3">
-            <p className="text-sm font-semibold">Personal Information</p>
+            <div className="flex items-center gap-3">
+              <p className="font-semibold text-base">Personal Information</p>
+              <div className="flex-1 h-px bg-base-200" />
+            </div>
             <div className="flex gap-2">
               <div className="flex flex-col gap-1 flex-1">
                 <label className="text-xs text-base-content/60">First Name</label>
@@ -171,7 +172,10 @@ export default function TeacherSettingsPage() {
 
           {/* ── School info ── */}
           <div className="flex flex-col gap-3">
-            <p className="text-sm font-semibold">School Information</p>
+            <div className="flex items-center gap-3">
+              <p className="font-semibold text-base">School Information</p>
+              <div className="flex-1 h-px bg-base-200" />
+            </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-base-content/60">School Name</label>
               <input
@@ -195,7 +199,10 @@ export default function TeacherSettingsPage() {
 
           {/* ── Principal info ── */}
           <div className="flex flex-col gap-3">
-            <p className="text-sm font-semibold">Principal Information</p>
+            <div className="flex items-center gap-3">
+              <p className="font-semibold text-base">Principal Information</p>
+              <div className="flex-1 h-px bg-base-200" />
+            </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-base-content/60">Principal Name</label>
               <input
@@ -218,8 +225,11 @@ export default function TeacherSettingsPage() {
           </div>
 
           {/* ── ID Document ── */}
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-semibold">ID Document</p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <p className="font-semibold text-base">ID Document</p>
+              <div className="flex-1 h-px bg-base-200" />
+            </div>
             <div className="bg-base-200 rounded-xl p-4 text-sm text-base-content/50 text-center">
               Document upload coming soon.
             </div>
@@ -232,7 +242,7 @@ export default function TeacherSettingsPage() {
           <button
             type="submit"
             disabled={saving}
-            className="btn btn-neutral w-full"
+            className="btn btn-primary w-full"
           >
             {saving ? <span className="loading loading-spinner loading-sm" /> : 'Save Changes'}
           </button>

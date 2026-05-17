@@ -68,8 +68,8 @@ export default async function ClassDetailPage({
     error = 'Could not load class details.'
   }
 
-  const trials = tasks.filter((t) => t.type === 'trial')
-  const quests = tasks.filter((t) => t.type === 'quest')
+  const trials  = tasks.filter((t) => t.type === 'trial')
+  const lessons = tasks.filter((t) => t.type === 'lesson' || t.type === 'quest')
 
   return (
     <div className="flex flex-col gap-4 pb-8">
@@ -130,7 +130,7 @@ export default async function ClassDetailPage({
               ) : (
                 <Link
                   key={task.id}
-                  href={`/child/classes/${class_id}/trial/${task.id}?subject=${encodeURIComponent(task.subject ?? '')}&difficulty=${task.difficulty ?? 'easy'}&title=${encodeURIComponent(task.title)}&reward=${task.gem_reward ?? 0}`}
+                  href={`/child/classes/${class_id}/trial/${task.id}?subject=${encodeURIComponent(task.subject ?? '')}&difficulty=${task.difficulty ?? 'easy'}&title=${encodeURIComponent(task.title)}`}
                   className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors"
                 >
                   <div className="w-10 h-10 shrink-0">
@@ -149,12 +149,6 @@ export default async function ClassDetailPage({
                       )}
                     </div>
                   </div>
-                  {task.gem_reward ? (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Image src="/icons/blue-gem.png" alt="Gem reward" width={16} height={16} />
-                      <span className="text-xs font-semibold">+{task.gem_reward}</span>
-                    </div>
-                  ) : null}
                   <span className="text-base-content/30 text-lg">›</span>
                 </Link>
               )
@@ -163,15 +157,18 @@ export default async function ClassDetailPage({
         )}
       </section>
 
-      {/* Quests section */}
+      {/* Lessons section */}
       <section className="flex flex-col gap-2">
-        <h2 className="font-bold text-lg">Quests</h2>
-        {quests.length === 0 ? (
-          <p className="text-sm text-base-content/50 py-4 text-center">No quests assigned yet.</p>
+        <h2 className="font-bold text-lg">Lessons</h2>
+        {lessons.length === 0 ? (
+          <p className="text-sm text-base-content/50 py-4 text-center">No lessons assigned yet.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {quests.map((task) =>
-              task.completed ? (
+            {lessons.map((task) => {
+              const href = task.type === 'lesson'
+                ? `/child/classes/${class_id}/lesson/${task.id}?ref=${encodeURIComponent(task.reference_id ?? '')}&title=${encodeURIComponent(task.title)}&subject=${encodeURIComponent(task.subject ?? '')}`
+                : `/child/classes/${class_id}/quest/${task.id}?subject=${encodeURIComponent(task.subject ?? '')}&difficulty=${task.difficulty ?? 'easy'}&title=${encodeURIComponent(task.title)}&reward=${task.gem_reward ?? 0}&ref=${encodeURIComponent(task.reference_id ?? '')}`
+              return task.completed ? (
                 <div
                   key={task.id}
                   className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 opacity-60 cursor-default"
@@ -182,16 +179,14 @@ export default async function ClassDetailPage({
                   </div>
                   <div className="flex-1 flex flex-col gap-0.5">
                     <p className="font-semibold text-sm line-through">{task.title}</p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {task.subject && <span className="text-xs text-base-content/60">{task.subject}</span>}
-                    </div>
+                    {task.subject && <span className="text-xs text-base-content/60">{task.subject}</span>}
                   </div>
                   <span className="badge badge-success badge-sm gap-1 shrink-0">✓ Done</span>
                 </div>
               ) : (
                 <Link
                   key={task.id}
-                  href={`/child/classes/${class_id}/quest/${task.id}?subject=${encodeURIComponent(task.subject ?? '')}&difficulty=${task.difficulty ?? 'easy'}&title=${encodeURIComponent(task.title)}&reward=${task.gem_reward ?? 0}&ref=${encodeURIComponent(task.reference_id ?? '')}`}
+                  href={href}
                   className="flex items-center gap-4 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors"
                 >
                   <div className="w-10 h-10 shrink-0">
@@ -202,24 +197,15 @@ export default async function ClassDetailPage({
                     <p className="font-semibold text-sm">{task.title}</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       {task.subject && <span className="text-xs text-base-content/60">{task.subject}</span>}
-                      {task.difficulty && (
-                        <span className="badge badge-sm badge-outline">{difficultyLabel(task.difficulty)}</span>
-                      )}
                       {task.due_date && (
                         <span className="text-xs text-base-content/40">Due {task.due_date}</span>
                       )}
                     </div>
                   </div>
-                  {task.gem_reward ? (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Image src="/icons/blue-gem.png" alt="Gem reward" width={16} height={16} />
-                      <span className="text-xs font-semibold">+{task.gem_reward}</span>
-                    </div>
-                  ) : null}
                   <span className="text-base-content/30 text-lg">›</span>
                 </Link>
               )
-            )}
+            })}
           </div>
         )}
       </section>

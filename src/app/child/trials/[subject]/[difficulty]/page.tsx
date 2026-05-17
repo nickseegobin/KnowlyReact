@@ -8,6 +8,8 @@ import QuestionRenderer from '@/components/QuestionRenderer'
 import { haptic, HAPTIC_SELECT } from '@/lib/haptic'
 import { soundSelect } from '@/lib/sound'
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 interface Question {
   question_id: string
   question_text?: string
@@ -42,8 +44,25 @@ interface ActiveSession {
   } | null
 }
 
+interface Module {
+  module_number: number
+  module_title: string
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
 const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }
 const TIME_PER_Q = 90
+
+// Maps display subject name → internal API key
+const SUBJECT_KEY: Record<string, string> = {
+  'Mathematics':              'math',
+  'English Language Arts':    'english',
+  'Science':                  'science',
+  'Social Studies':           'social_studies',
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function TrialPage({
   params,
@@ -54,6 +73,7 @@ export default function TrialPage({
   const subject = decodeURIComponent(encodedSubject)
   const router = useRouter()
 
+  // ── Exam state ───────────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<'confirm' | 'loading' | 'exam' | 'submitting'>('confirm')
   const [session, setSession] = useState<Session | null>(null)
   const [currentIdx, setCurrentIdx] = useState(0)
@@ -66,6 +86,12 @@ export default function TrialPage({
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null)
   const [flashSelected, setFlashSelected] = useState<string | null>(null)
 
+  // ── Topic selection state ────────────────────────────────────────────────────
+  const [modules, setModules] = useState<Module[]>([])
+  const [modulesLoading, setModulesLoading] = useState(true)
+  const [selectedModules, setSelectedModules] = useState<number[]>([]) // empty = All Topics
+
+  // ── Refs ─────────────────────────────────────────────────────────────────────
   const sessionRef = useRef<Session | null>(null)
   const answersRef = useRef<Record<string, string>>({})
   const timingsRef = useRef<Record<string, number>>({})
@@ -77,7 +103,10 @@ export default function TrialPage({
   useEffect(() => { timingsRef.current = timings }, [timings])
   useEffect(() => { currentIdxRef.current = currentIdx }, [currentIdx])
 
+  // ── On mount: fetch gem costs, active session, module list ───────────────────
   useEffect(() => {
+    const subjectKey = SUBJECT_KEY[subject] ?? subject.toLowerCase().replace(/\s+/g, '_')
+
     fetch('/api/gems/costs')
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
@@ -96,9 +125,16 @@ export default function TrialPage({
         if (subjectMatch && s.difficulty === difficulty) setActiveSession(s)
       })
       .catch(() => {})
+
+    fetch(`/api/exams/topics?subject=${encodeURIComponent(subjectKey)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.modules?.length > 0) setModules(data.modules) })
+      .catch(() => {})
+      .finally(() => setModulesLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── Checkpoint auto-save ─────────────────────────────────────────────────────
   const saveCheckpoint = useCallback(() => {
     const s = sessionRef.current
     if (!s) return
@@ -119,7 +155,7 @@ export default function TrialPage({
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [saveCheckpoint])
 
-  // Timer
+  // ── Timer ────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'exam') return
     if (timeLeft <= 0) { handleNext(); return }
@@ -132,8 +168,25 @@ export default function TrialPage({
   const total = questions.length
   const currentQ = questions[currentIdx]
 
+  // ── Topic selection helpers ──────────────────────────────────────────────────
+  function toggleModule(moduleNumber: number) {
+    setSelectedModules((prev) =>
+      prev.includes(moduleNumber)
+        ? prev.filter((n) => n !== moduleNumber)
+        : [...prev, moduleNumber]
+    )
+  }
+
+  function trialTypeLabel() {
+    if (selectedModules.length === 0) return 'General Trial — All Topics'
+    if (selectedModules.length === 1) return 'Single Topic Trial'
+    return `Multi-Topic Trial — ${selectedModules.length} topics selected`
+  }
+
+  // ── Exam control ─────────────────────────────────────────────────────────────
   function applySession(data: Session, checkpointState?: ActiveSession['checkpoint']) {
     setSession(data)
+    sessionStorage.setItem('trial_questions', JSON.stringify(data.package.questions))
     if (typeof data.balance_after === 'number') {
       window.dispatchEvent(new CustomEvent('knowly:gem-update', { detail: { balance: data.balance_after } }))
     }
@@ -156,10 +209,16 @@ export default function TrialPage({
         await fetch(`/api/exams/${activeSession.session_id}/cancel`, { method: 'POST' }).catch(() => {})
         setActiveSession(null)
       }
+      const scope = selectedModules.length === 0 ? 'period' : 'general_topic'
       const res = await fetch('/api/exams/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, difficulty }),
+        body: JSON.stringify({
+          subject,
+          difficulty,
+          scope,
+          module_numbers: selectedModules,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.message ?? 'Failed to start trial'); setPhase('confirm'); return }
@@ -249,7 +308,7 @@ export default function TrialPage({
     }
   }
 
-  // ── Confirm ───────────────────────────────────────────────────────────────
+  // ── Confirm screen ────────────────────────────────────────────────────────────
   if (phase === 'confirm') {
     return (
       <div className="flex flex-col gap-4 animate-fade-in-up">
@@ -263,23 +322,73 @@ export default function TrialPage({
           ]} />
         </div>
 
-        <div className="card bg-base-200 rounded-2xl p-6 flex flex-col items-center gap-6 mt-4">
-          <h2 className="text-2xl font-bold">{subject}</h2>
-          <p className="text-base-content/60">{DIFFICULTY_LABEL[difficulty] ?? difficulty} Trial</p>
+        <div className="card bg-base-200 rounded-2xl p-6 flex flex-col items-center gap-5 mt-2">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold">{subject}</h2>
+            <p className="text-base-content/60 text-sm">{DIFFICULTY_LABEL[difficulty] ?? difficulty} Trial</p>
+          </div>
+
+          {/* ── Topic selector ── */}
+          <div className="w-full flex flex-col gap-3">
+            <p className="text-sm font-semibold text-center">Select topics to be tested on</p>
+
+            {modulesLoading ? (
+              <div className="flex justify-center py-2">
+                <span className="loading loading-dots loading-sm" />
+              </div>
+            ) : modules.length > 0 ? (
+              <div className="flex flex-wrap gap-2 justify-center">
+                {/* All Topics button */}
+                <button
+                  onClick={() => setSelectedModules([])}
+                  className={`btn btn-sm rounded-full ${
+                    selectedModules.length === 0 ? 'btn-primary' : 'btn-ghost border border-base-300'
+                  }`}
+                >
+                  All Topics
+                </button>
+
+                {/* Per-module buttons */}
+                {modules.map((m) => (
+                  <button
+                    key={m.module_number}
+                    onClick={() => toggleModule(m.module_number)}
+                    className={`btn btn-sm rounded-full ${
+                      selectedModules.includes(m.module_number)
+                        ? 'btn-primary'
+                        : 'btn-ghost border border-base-300'
+                    }`}
+                  >
+                    {m.module_title}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {/* Trial type label */}
+            <p className="text-center text-xs text-base-content/50">{trialTypeLabel()}</p>
+          </div>
+
+          <div className="divider my-0" />
 
           {activeSession ? (
+            /* ── Resume flow ── */
             <>
               <div className="w-full bg-base-100 rounded-xl p-4 flex flex-col gap-1 border border-base-300">
                 <p className="font-semibold text-sm">Unfinished trial detected</p>
                 <p className="text-xs text-base-content/60">
-                  {activeSession.checkpoint ? 'Your progress was saved.' : "No saved progress — you'll start from the beginning."}
+                  {activeSession.checkpoint
+                    ? 'Your progress was saved.'
+                    : "No saved progress — you'll start from the beginning."}
                 </p>
               </div>
               {error && <div className="alert alert-error py-2 text-sm w-full"><span>{error}</span></div>}
               <button onClick={resumeExam} className="btn btn-primary btn-lg w-full">Resume Trial</button>
-              <div className="divider text-xs text-base-content/40 my-0">or</div>
+              <div className="divider text-xs text-base-content/40 my-0">or start fresh</div>
               <div className="w-full flex flex-col gap-2">
-                <button onClick={startExam} className="btn btn-outline w-full">Start New Trial</button>
+                <button onClick={startExam} className="btn btn-outline w-full">
+                  Start New {selectedModules.length === 0 ? 'General' : selectedModules.length === 1 ? 'Topic' : 'Multi-Topic'} Trial
+                </button>
                 <p className="text-xs text-center text-base-content/50">
                   This will abandon the unfinished trial and spend {gemCost ?? '…'} gem{gemCost !== 1 ? 's' : ''}.
                 </p>
@@ -287,8 +396,9 @@ export default function TrialPage({
               <button onClick={() => router.back()} className="btn btn-ghost w-full btn-sm">Cancel</button>
             </>
           ) : (
+            /* ── Fresh start flow ── */
             <>
-              <div className="flex items-center gap-3 bg-base-100 rounded-xl px-6 py-4">
+              <div className="flex items-center gap-3 bg-base-100 rounded-xl px-6 py-4 w-full justify-center">
                 <Image src="/icons/blue-gem.png" alt="Blue gem" width={32} height={32} />
                 <div>
                   <p className="text-sm text-base-content/60">Cost</p>
@@ -296,7 +406,9 @@ export default function TrialPage({
                 </div>
               </div>
               {error && <div className="alert alert-error py-2 text-sm w-full"><span>{error}</span></div>}
-              <button onClick={startExam} className="btn btn-neutral btn-lg w-full">Start Trial</button>
+              <button onClick={startExam} className="btn btn-neutral btn-lg w-full">
+                Start Trial
+              </button>
               <button onClick={() => router.back()} className="btn btn-ghost w-full">Cancel</button>
             </>
           )}
@@ -305,7 +417,7 @@ export default function TrialPage({
     )
   }
 
-  // ── Loading / Submitting ──────────────────────────────────────────────────
+  // ── Loading / Submitting ──────────────────────────────────────────────────────
   if (phase === 'loading' || phase === 'submitting') {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
@@ -317,7 +429,7 @@ export default function TrialPage({
     )
   }
 
-  // ── Exam ──────────────────────────────────────────────────────────────────
+  // ── Exam ──────────────────────────────────────────────────────────────────────
   if (!currentQ) return null
 
   const mmNum = Math.floor(timeLeft / 60)
@@ -332,7 +444,6 @@ export default function TrialPage({
     <div className="flex flex-col gap-3 pb-4">
       {/* ── Timer + progress bar ── */}
       <div className="rounded-2xl bg-base-200 px-4 py-3 flex items-center justify-between shadow-sm">
-        {/* Countdown display */}
         <div className={`flex items-center gap-0.5 font-mono font-black text-2xl ${timerColor} ${timerPulse}`}>
           <span className="countdown">
             <span style={{ '--value': mmNum } as React.CSSProperties} />
@@ -343,12 +454,10 @@ export default function TrialPage({
           </span>
         </div>
 
-        {/* Q counter */}
         <span className="text-sm font-semibold text-base-content/60">
           Q {currentIdx + 1} <span className="text-base-content/30">/ {total}</span>
         </span>
 
-        {/* Save & exit */}
         <button
           onClick={() => { saveCheckpoint(); router.back() }}
           className="btn btn-ghost btn-xs gap-1 text-base-content/40"

@@ -107,26 +107,22 @@ export default function StudentAnalyticsPage() {
   useEffect(() => { fetchAnalytics() }, [fetchAnalytics])
 
   return (
-    <div className="max-w-sm mx-auto w-full px-4 py-6 flex flex-col gap-6">
+    <div className="flex flex-col gap-6 max-w-2xl mx-auto w-full">
       {/* ── Header ── */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="text-base-content/50 hover:text-base-content">
-          ←
-        </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">
-            {data?.nickname ?? 'Student Analytics'}
-          </h1>
-          <p className="text-sm text-base-content/50">Individual performance</p>
+      <div>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">{data?.nickname ?? 'Student'}</h1>
+          {data?.level && <span className="badge badge-ghost badge-sm">{data.level}</span>}
         </div>
+        <p className="text-sm text-base-content/60">Individual performance</p>
       </div>
 
       {/* ── Filters ── */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="flex gap-2 flex-wrap">
         <select
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
-          className="select select-bordered select-sm w-full"
+          className="select select-bordered select-sm"
         >
           <option value="">All Terms</option>
           {PERIODS.map((p) => (
@@ -136,7 +132,7 @@ export default function StudentAnalyticsPage() {
         <select
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
-          className="select select-bordered select-sm w-full"
+          className="select select-bordered select-sm"
         >
           <option value="">All Subjects</option>
           {SUBJECTS.map((s) => (
@@ -158,26 +154,34 @@ export default function StudentAnalyticsPage() {
       {!loading && !error && data && (
         <>
           {/* ── Summary stats ── */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-1">
-              <span className="text-3xl font-bold">{score(data.avg_score)}</span>
-              <span className="text-xs text-base-content/50">Avg Score</span>
+          <div className="flex gap-0 text-center rounded-2xl bg-base-200 overflow-hidden">
+            <div className="flex-1 py-4">
+              <p className="text-2xl font-bold text-success">{score(data.avg_score)}</p>
+              <p className="text-xs text-base-content/50 mt-0.5">Avg Score</p>
             </div>
-            <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-1">
-              <span className="text-3xl font-bold">{data.weekly_trials}</span>
-              <span className="text-xs text-base-content/50">Trials This Week</span>
+            <div className="w-px bg-base-300" />
+            <div className="flex-1 py-4">
+              <p className="text-2xl font-bold">{data.weekly_trials}</p>
+              <p className="text-xs text-base-content/50 mt-0.5">This Week</p>
             </div>
-            <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-1">
-              <span className="text-3xl font-bold">{data.trial_count}</span>
-              <span className="text-xs text-base-content/50">Trials</span>
+            <div className="w-px bg-base-300" />
+            <div className="flex-1 py-4">
+              <p className="text-2xl font-bold">{data.trial_count}</p>
+              <p className="text-xs text-base-content/50 mt-0.5">Trials</p>
             </div>
-            <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-1">
-              <span className="text-3xl font-bold">{data.quest_count}</span>
-              <span className="text-xs text-base-content/50">Quests</span>
+            <div className="w-px bg-base-300" />
+            <div className="flex-1 py-4">
+              <p className="text-2xl font-bold">{data.quest_count}</p>
+              <p className="text-xs text-base-content/50 mt-0.5">Quests</p>
             </div>
           </div>
 
-          {/* ── Badges ── */}
+          {/* ── Overview section divider + badges ── */}
+          <div className="flex items-center gap-3">
+            <p className="font-semibold text-base">Overview</p>
+            <div className="flex-1 h-px bg-base-200" />
+          </div>
+
           {data.badges_earned > 0 && (
             <div className="bg-base-200 rounded-2xl p-4 flex items-center gap-3">
               <span className="text-2xl">🏅</span>
@@ -190,41 +194,48 @@ export default function StudentAnalyticsPage() {
 
           {/* ── Strengths / Weaknesses ── */}
           {(data.strengths.length > 0 || data.weaknesses.length > 0) && (
-            <div className="grid grid-cols-2 gap-3">
-              {data.strengths.length > 0 && (
-                <div className="bg-base-200 rounded-2xl p-3">
-                  <p className="text-xs font-semibold text-success mb-2">Strengths</p>
-                  {data.strengths.map((s, i) => (
-                    <div key={i} className="flex items-center justify-between mb-0.5">
-                      <p className="text-xs text-base-content/70 truncate">{s.topic}</p>
-                      <p className="text-xs font-semibold text-success ml-1 shrink-0">{score(s.correct_rate)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {data.weaknesses.length > 0 && (
-                <div className="bg-base-200 rounded-2xl p-3">
-                  <p className="text-xs font-semibold text-error mb-2">Needs Work</p>
-                  {data.weaknesses.map((w, i) => (
-                    <div key={i} className="flex items-center justify-between mb-0.5">
-                      <p className="text-xs text-base-content/70 truncate">{w.topic}</p>
-                      <p className="text-xs font-semibold text-error ml-1 shrink-0">{score(w.correct_rate)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <>
+              <div className="flex items-center gap-3">
+                <p className="font-semibold text-base">Topic Breakdown</p>
+                <div className="flex-1 h-px bg-base-200" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {data.strengths.length > 0 && (
+                  <div className="bg-base-200 rounded-2xl p-4">
+                    <p className="text-sm font-semibold text-success mb-2">Strengths</p>
+                    {data.strengths.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between mb-0.5">
+                        <p className="text-xs text-base-content/70 truncate">{s.topic}</p>
+                        <p className="text-xs font-semibold text-success ml-1 shrink-0">{score(s.correct_rate)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {data.weaknesses.length > 0 && (
+                  <div className="bg-base-200 rounded-2xl p-4">
+                    <p className="text-sm font-semibold text-error mb-2">Needs Work</p>
+                    {data.weaknesses.map((w, i) => (
+                      <div key={i} className="flex items-center justify-between mb-0.5">
+                        <p className="text-xs text-base-content/70 truncate">{w.topic}</p>
+                        <p className="text-xs font-semibold text-error ml-1 shrink-0">{score(w.correct_rate)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           {/* ── Topic breakdown ── */}
           {data.topic_breakdown && data.topic_breakdown.length > 0 && (
             <section className="flex flex-col gap-3">
-              <h2 className="text-sm font-semibold text-base-content/60 uppercase tracking-wide">
-                Topic Breakdown
-              </h2>
+              <div className="flex items-center gap-3">
+                <p className="font-semibold text-base">All Topics</p>
+                <div className="flex-1 h-px bg-base-200" />
+              </div>
               <div className="flex flex-col gap-2">
                 {data.topic_breakdown.map((t, i) => (
-                  <div key={i} className="bg-base-200 rounded-xl px-4 py-3">
+                  <div key={i} className="bg-base-200 rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-1">
                       <div>
                         <p className="text-sm font-semibold">{t.topic}</p>
@@ -248,12 +259,13 @@ export default function StudentAnalyticsPage() {
           {/* ── Recent trials ── */}
           {data.recent_trials && data.recent_trials.length > 0 && (
             <section className="flex flex-col gap-3">
-              <h2 className="text-sm font-semibold text-base-content/60 uppercase tracking-wide">
-                Recent Trials
-              </h2>
+              <div className="flex items-center gap-3">
+                <p className="font-semibold text-base">Recent Trials</p>
+                <div className="flex-1 h-px bg-base-200" />
+              </div>
               <div className="flex flex-col gap-2">
                 {data.recent_trials.map((t, i) => (
-                  <div key={i} className="bg-base-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <div key={i} className="bg-base-200 rounded-2xl p-4 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold">
                         {subjectLabel(t.subject)}{t.topic ? ` · ${t.topic}` : ''}

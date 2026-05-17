@@ -76,11 +76,11 @@ export default function NotificationsList({ detailBasePath, onAllRead }: Props) 
   const displayed   = showAll ? notifications : notifications.filter((n) => !n.is_read)
 
   return (
-    <div className="max-w-sm mx-auto w-full px-4 py-6 flex flex-col gap-4">
+    <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Notifications</h1>
+          <h1 className="text-3xl font-bold">Notifications</h1>
           <p className="text-sm text-base-content/50">
             {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
           </p>
@@ -127,7 +127,7 @@ export default function NotificationsList({ detailBasePath, onAllRead }: Props) 
             <button
               key={n.id}
               onClick={() => openNotification(n)}
-              className={`rounded-2xl px-4 py-3 text-left transition-colors flex items-start gap-3 ${
+              className={`rounded-2xl p-4 text-left transition-colors flex items-start gap-3 ${
                 n.is_read ? 'bg-base-200 hover:bg-base-300' : 'bg-base-200 border border-primary/30 hover:bg-base-300'
               }`}
             >

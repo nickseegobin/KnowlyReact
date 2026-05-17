@@ -503,8 +503,8 @@ export default function QuestDetailPage({
               📝 Worked Examples ({examples.length})
             </div>
             <div className="collapse-content flex flex-col gap-5 pt-1">
-              {examples.map((ex) => (
-                <div key={ex.example_number} className="flex flex-col gap-2">
+              {examples.map((ex, exIdx) => (
+                <div key={exIdx} className="flex flex-col gap-2">
                   <p className="text-xs font-bold text-primary uppercase tracking-wide">
                     Example {ex.example_number}
                   </p>
@@ -625,9 +625,6 @@ export default function QuestDetailPage({
           <p className={`text-2xl font-bold ${isCorrect ? 'text-success' : 'text-error'}`}>
             {isCorrect ? '✓ Correct!' : '✗ Not quite'}
           </p>
-          <p className="text-sm text-base-content/70 mt-2 leading-relaxed">
-            {currentCheck?.explanation}
-          </p>
           {!isCorrect && currentCheck && (
             <p className="text-sm font-semibold mt-3">
               Correct answer:{' '}
@@ -635,6 +632,15 @@ export default function QuestDetailPage({
                 {currentCheck.correct_answer} — {currentCheck.options[currentCheck.correct_answer]}
               </span>
             </p>
+          )}
+          {currentCheck?.explanation && (
+            <div className="collapse collapse-arrow bg-base-100/40 rounded-xl mt-3">
+              <input type="checkbox" />
+              <div className="collapse-title text-sm py-2 min-h-0 font-medium">📝 Explanation</div>
+              <div className="collapse-content text-sm text-base-content/70 leading-relaxed">
+                {currentCheck.explanation}
+              </div>
+            </div>
           )}
         </div>
 
@@ -740,9 +746,6 @@ export default function QuestDetailPage({
           <p className={`text-2xl font-bold ${reviewCorrect ? 'text-success' : 'text-error'}`}>
             {reviewCorrect ? '✓ Got it!' : '✗ Keep trying'}
           </p>
-          <p className="text-sm text-base-content/70 mt-2 leading-relaxed">
-            {item.check.explanation}
-          </p>
           {!reviewCorrect && (
             <p className="text-sm font-semibold mt-3">
               Correct answer:{' '}
@@ -750,6 +753,15 @@ export default function QuestDetailPage({
                 {item.check.correct_answer} — {item.check.options[item.check.correct_answer]}
               </span>
             </p>
+          )}
+          {item.check.explanation && (
+            <div className="collapse collapse-arrow bg-base-100/40 rounded-xl mt-3">
+              <input type="checkbox" />
+              <div className="collapse-title text-sm py-2 min-h-0 font-medium">📝 Explanation</div>
+              <div className="collapse-content text-sm text-base-content/70 leading-relaxed">
+                {item.check.explanation}
+              </div>
+            </div>
           )}
         </div>
 

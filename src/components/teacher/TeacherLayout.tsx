@@ -6,7 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import {
   Menu, Gem,
-  Home, Users, Bell, Settings2,
+  Home, Users, Bell, Settings2, Newspaper,
 } from 'lucide-react'
 import type { TeacherProfile, ClassEntry } from '@/types/knowly'
 import { useUnreadCount } from '@/hooks/useUnreadCount'
@@ -18,6 +18,7 @@ const MAIN_NAV = [
 ] as const
 
 const ACCOUNT_NAV = [
+  { label: 'News',     Icon: Newspaper, href: '/teacher/news',             iconClass: 'bg-base-200 text-base-content/60' },
   { label: 'Settings', Icon: Settings2, href: '/teacher-profile/settings', iconClass: 'bg-base-200 text-base-content/60' },
 ] as const
 

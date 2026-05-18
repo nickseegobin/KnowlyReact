@@ -25,7 +25,7 @@ const TRACK_NAV = [
   { label: 'Leaderboard', Icon: Trophy,     href: '/child/leaderboard', iconClass: 'bg-primary/10 text-primary' },
   { label: 'Progress',    Icon: TrendingUp, href: '/child/my-progress', iconClass: 'bg-info/10 text-info' },
   { label: 'Badges',      Icon: Award,      href: '/badges',            iconClass: 'bg-warning/10 text-warning' },
-  { label: 'News',        Icon: Newspaper,  href: '/news',              iconClass: 'bg-base-200 text-base-content/50' },
+  { label: 'News',        Icon: Newspaper,  href: '/child/news',        iconClass: 'bg-base-200 text-base-content/50' },
 ] as const
 
 interface Props {

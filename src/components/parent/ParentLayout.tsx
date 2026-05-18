@@ -7,7 +7,7 @@ import Link from 'next/link'
 import {
   Menu, Gem,
   Home, BarChart2, Bell, UserPlus,
-  Receipt, Settings2,
+  Receipt, Settings2, Newspaper,
 } from 'lucide-react'
 import type { AuthUser } from '@/types/knowly'
 import { useUnreadCount } from '@/hooks/useUnreadCount'
@@ -20,6 +20,7 @@ const MAIN_NAV = [
 ] as const
 
 const ACCOUNT_NAV = [
+  { label: 'News',      Icon: Newspaper, href: '/parent-profile/news',     iconClass: 'bg-base-200 text-base-content/60' },
   { label: 'Orders',    Icon: Receipt,   href: '/parent-profile/orders',   iconClass: 'bg-base-200 text-base-content/60' },
   { label: 'Settings',  Icon: Settings2, href: '/parent-profile/settings', iconClass: 'bg-base-200 text-base-content/60' },
   { label: 'Add Child', Icon: UserPlus,  href: '/register/add-child',      iconClass: 'bg-success/10 text-success' },

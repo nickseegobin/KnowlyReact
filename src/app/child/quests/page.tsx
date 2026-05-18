@@ -14,6 +14,7 @@ import {
 
 interface ProgressionTopic {
   topic: string
+  module_number: number
   module_title: string | null
   period: string | null
   sort_order: number
@@ -48,9 +49,9 @@ interface ProgressionData {
   subjects: Record<string, SubjectProgression>
 }
 
-type DisplayStatus = 'not_started' | 'in_progress' | 'weak' | 'mastered' | 'locked' | 'available'
+type DisplayStatus = 'in_progress' | 'weak' | 'mastered' | 'locked' | 'available'
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function levelLabel(level: string) {
   return level === 'std_4' ? 'Standard 4' : level === 'std_5' ? 'Standard 5' : level
@@ -61,15 +62,15 @@ function periodLabel(period: string) {
   return map[period] ?? period
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
+// Topic-level sequential unlock:
+// - First topic is always available
+// - Each subsequent topic unlocks when the previous is mastered
+// This matches per-section play where each sub-topic is its own session.
 function computeDisplayStatuses(
   topics: ProgressionTopic[]
 ): (ProgressionTopic & { displayStatus: DisplayStatus })[] {
   return topics.map((topic, i) => {
-    if (topic.status !== 'not_started') {
-      return { ...topic, displayStatus: topic.status }
-    }
+    if (topic.status !== 'not_started') return { ...topic, displayStatus: topic.status }
     if (i === 0) return { ...topic, displayStatus: 'available' }
     const prev = topics[i - 1]
     if (prev.status === 'mastered') return { ...topic, displayStatus: 'available' }
@@ -77,15 +78,26 @@ function computeDisplayStatuses(
   })
 }
 
-function nodeStyle(status: DisplayStatus) {
+function topicStyle(status: DisplayStatus) {
   switch (status) {
-    case 'mastered':    return { ring: 'bg-success text-success-content', card: 'bg-success/10 border-success/20', badge: 'badge-success', label: 'Mastered' }
-    case 'in_progress': return { ring: 'bg-primary text-primary-content', card: 'bg-primary/10 border-primary/20', badge: 'badge-primary', label: 'In Progress' }
-    case 'weak':        return { ring: 'bg-warning text-warning-content', card: 'bg-warning/10 border-warning/20', badge: 'badge-warning', label: 'Needs Practice' }
-    case 'available':   return { ring: 'bg-base-300 text-base-content',   card: 'bg-base-200 border-base-300',   badge: 'badge-ghost',   label: 'Start' }
-    case 'locked':      return { ring: 'bg-base-200 text-base-content/30', card: 'bg-base-100 border-base-200 opacity-50', badge: '', label: 'Locked' }
-    default:            return { ring: 'bg-base-300 text-base-content',   card: 'bg-base-200 border-base-300',   badge: 'badge-ghost',   label: 'Start' }
+    case 'mastered':    return { dot: 'bg-success', text: '', badge: 'badge-success', label: 'Done' }
+    case 'in_progress': return { dot: 'bg-primary', text: '', badge: 'badge-primary', label: 'In Progress' }
+    case 'weak':        return { dot: 'bg-warning', text: '', badge: 'badge-warning', label: 'Needs Practice' }
+    case 'available':   return { dot: 'bg-base-content/30', text: '', badge: 'badge-ghost', label: 'Start' }
+    case 'locked':      return { dot: 'bg-base-200', text: 'opacity-40', badge: '', label: '' }
   }
+}
+
+// wpFetch unwraps json.data, so GET /quests returns { quests: [...] }
+interface QuestCatalogueItem {
+  quest_id: string
+  module_number: string | number
+  module_title: string | null
+  subject: string
+}
+
+interface QuestCatalogueData {
+  quests: QuestCatalogueItem[]
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -120,7 +132,6 @@ export default async function QuestsPage({
     try {
       const qs = new URLSearchParams({ level, curriculum: 'tt_primary' })
       if (period) qs.set('period', period)
-
       progressionData = await wpFetch<ProgressionData>(
         `/child/progression?${qs}`, 'GET', undefined, token
       )
@@ -142,13 +153,40 @@ export default async function QuestsPage({
   const subjectData = selectedSubject ? progressionData?.subjects[selectedSubject] : null
   const topicsWithStatus = subjectData ? computeDisplayStatuses(subjectData.topics) : []
 
-  // Group topics hierarchically by module_title
-  const moduleGroups: Array<{ title: string; topics: typeof topicsWithStatus }> = []
+  // Fetch quest catalogue and build module_number → quest_id map
+  const moduleToQuestId: Record<number, string> = {}
+  if (selectedSubject && token) {
+    try {
+      const qs2 = new URLSearchParams({ subject: selectedSubject })
+      if (level)  qs2.set('level',  level)
+      if (period) qs2.set('period', period)
+      const catalogue = await wpFetch<QuestCatalogueData>(`/quests?${qs2}`, 'GET', undefined, token)
+      for (const q of (catalogue?.quests ?? [])) {
+        const modNum = Number(q.module_number)
+        if (!isNaN(modNum)) moduleToQuestId[modNum] = q.quest_id
+      }
+    } catch { /* graceful degrade */ }
+  }
+
+  // Group topics by module for display, tracking each topic's index within its module
+  const moduleGroups: Array<{
+    title: string
+    modNum: number
+    topics: (typeof topicsWithStatus[number] & { sectionIdx: number })[]
+  }> = []
+
   for (const t of topicsWithStatus) {
-    const key = t.module_title ?? t.topic
-    const existing = moduleGroups.find((g) => g.title === key)
-    if (existing) existing.topics.push(t)
-    else moduleGroups.push({ title: key, topics: [t] })
+    const modNum = t.module_number
+    const existing = moduleGroups.find((g) => g.modNum === modNum)
+    if (existing) {
+      existing.topics.push({ ...t, sectionIdx: existing.topics.length })
+    } else {
+      moduleGroups.push({
+        title: t.module_title ?? String(modNum),
+        modNum,
+        topics: [{ ...t, sectionIdx: 0 }],
+      })
+    }
   }
 
   return (
@@ -173,17 +211,12 @@ export default async function QuestsPage({
       {!level && (
         <p className="text-base-content/40 text-sm">No student profile found. Make sure a child account is active.</p>
       )}
-
-      {fetchError && (
-        <div className="alert alert-error text-sm py-2">{fetchError}</div>
-      )}
+      {fetchError && <div className="alert alert-error text-sm py-2">{fetchError}</div>}
 
       {progressionData && availableSubjects.length === 0 && (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <div className="text-5xl">📚</div>
-          <p className="text-base-content/60 text-sm">
-            No curriculum topics found for your level yet.<br />Check back soon!
-          </p>
+          <p className="text-base-content/60 text-sm">No curriculum topics found for your level yet.<br />Check back soon!</p>
         </div>
       )}
 
@@ -204,7 +237,7 @@ export default async function QuestsPage({
             ))}
           </div>
 
-          {/* Selected subject banner */}
+          {/* Subject banner */}
           {selectedSubject && (
             <div className="flex items-center gap-3">
               <p className="font-semibold text-base">{SUBJECT_DISPLAY[selectedSubject]}</p>
@@ -232,67 +265,56 @@ export default async function QuestsPage({
             </div>
           )}
 
-          {/* Topic nodes — grouped by module_title */}
-          {moduleGroups.length > 0 && (() => {
-            let globalIdx = 0
-            return (
-              <div className="relative flex flex-col gap-0">
-                {/* Vertical connector line */}
-                <div className="absolute left-[19px] top-10 bottom-10 w-0.5 bg-base-300 z-0 pointer-events-none" />
+          {/* Topic path — grouped by module, individual rows per sub-topic */}
+          {moduleGroups.length > 0 && (
+            <div className="flex flex-col gap-6">
+              {moduleGroups.map(({ title: moduleTitle, modNum, topics: groupTopics }) => {
+                const questId = moduleToQuestId[modNum]
+                return (
+                  <div key={modNum} className="flex flex-col gap-1">
+                    {/* Module header */}
+                    <p className="text-xs font-bold text-base-content/40 uppercase tracking-wider px-1 mb-1">
+                      {moduleTitle}
+                    </p>
 
-                {moduleGroups.map(({ title: moduleTitle, topics: groupTopics }, groupIdx) => {
-                  const showHeader = groupTopics.length > 1 ||
-                    (groupTopics[0].module_title !== null && groupTopics[0].module_title !== groupTopics[0].topic)
-                  const subjectLabel = SUBJECT_DISPLAY[selectedSubject] ?? selectedSubject
+                    {/* Individual sub-topic rows */}
+                    <div className="flex flex-col gap-2">
+                      {groupTopics.map((topic) => {
+                        const style = topicStyle(topic.displayStatus)
+                        const isLocked = topic.displayStatus === 'locked'
+                        const href = (!isLocked && questId)
+                          ? `/child/quests/${questId}?section=${topic.sectionIdx}&topic=${encodeURIComponent(topic.topic)}`
+                          : null
 
-                  return (
-                    <div key={moduleTitle} className={groupIdx > 0 ? 'mt-4' : ''}>
-                      {showHeader && (
-                        <p className="text-xs font-bold text-base-content/40 uppercase tracking-wider pl-14 pr-2 mb-2">
-                          {moduleTitle}
-                        </p>
-                      )}
-                      <div className="flex flex-col gap-2">
-                        {groupTopics.map((topic) => {
-                          const nodeNum = ++globalIdx
-                          const style = nodeStyle(topic.displayStatus)
-                          const isLocked = topic.displayStatus === 'locked'
-                          const href = `/child/quests/${encodeURIComponent(subjectLabel)}/${encodeURIComponent(topic.topic)}`
+                        const row = (
+                          <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border bg-base-100 border-base-200 ${style.text} ${!isLocked ? 'hover:bg-base-200 transition-colors' : ''}`}>
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
+                            <span className="flex-1 text-sm font-medium">{topic.topic}</span>
+                            {topic.best_score !== null && (
+                              <span className="text-xs text-base-content/40 mr-1">{topic.best_score}%</span>
+                            )}
+                            {isLocked ? (
+                              <span className="text-base-content/20 text-xs">🔒</span>
+                            ) : style.badge ? (
+                              <span className={`badge badge-sm ${style.badge}`}>{style.label}</span>
+                            ) : null}
+                          </div>
+                        )
 
-                          const cardInner = (
-                            <div className={`relative z-10 flex items-center gap-3 p-3 rounded-2xl border ${style.card} ${showHeader ? 'ml-6' : ''}`}>
-                              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${style.ring}`}>
-                                {topic.displayStatus === 'mastered' ? '✓' : topic.displayStatus === 'locked' ? '🔒' : nodeNum}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className={`font-semibold text-sm leading-tight ${isLocked ? 'text-base-content/40' : ''}`}>
-                                  {topic.topic}
-                                </p>
-                                {topic.best_score !== null && (
-                                  <p className="text-xs text-base-content/50 mt-0.5">Best: {topic.best_score}%</p>
-                                )}
-                              </div>
-                              {style.badge && (
-                                <span className={`badge badge-sm shrink-0 ${style.badge}`}>{style.label}</span>
-                              )}
-                            </div>
-                          )
-
-                          return isLocked ? (
-                            <div key={topic.topic}>{cardInner}</div>
-                          ) : (
-                            <Link key={topic.topic} href={href} className="block">
-                              {cardInner}
-                            </Link>
-                          )
-                        })}
-                      </div>
+                        return href ? (
+                          <Link key={topic.topic} href={href} className="block">
+                            {row}
+                          </Link>
+                        ) : (
+                          <div key={topic.topic}>{row}</div>
+                        )
+                      })}
                     </div>
-                  )
-                })}
-              </div>
-            )
-          })()}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </>
       )}
     </div>

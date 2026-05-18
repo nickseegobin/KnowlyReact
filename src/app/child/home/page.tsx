@@ -4,6 +4,7 @@ import { Compass, BookOpen, ClipboardCheck, Users, Trophy, TrendingUp, Award, Ge
 import { getTokenFromCookie } from '@/lib/cookies'
 import { wpFetch } from '@/lib/wp-api'
 import type { AuthUser } from '@/types/knowly'
+import RotatingCTA from '@/components/child/RotatingCTA'
 
 interface ProgressionTopic {
   topic: string
@@ -75,8 +76,6 @@ export default async function ChildHomePage() {
     }
   }
 
-  const questHref = continueSubject ? `/child/quests/${continueSubject}` : '/child/quests'
-
   return (
     <div className="flex flex-col gap-5 py-2 max-w-2xl mx-auto">
 
@@ -99,41 +98,13 @@ export default async function ChildHomePage() {
         </div>
       </div>
 
-      {/* ── Continue Quest CTA ── */}
-      <Link
-        href={questHref}
-        className="rounded-2xl bg-primary text-primary-content p-5 flex flex-col gap-3 hover:opacity-90 transition-opacity"
-      >
-        <div className="flex flex-col gap-1">
-          {continueTopic ? (
-            <>
-              <p className="text-xs font-medium uppercase tracking-wide text-primary-content/60">
-                Continue Quest · {SUBJECT_LABEL[continueSubject] ?? continueSubject}
-              </p>
-              <p className="font-semibold text-lg leading-snug">{continueTopic}</p>
-            </>
-          ) : (
-            <>
-              <p className="text-xs font-medium uppercase tracking-wide text-primary-content/60">Quest Path</p>
-              <p className="font-semibold text-lg">Ready to learn?</p>
-              <p className="text-sm text-primary-content/70">Pick up your next topic and earn gems.</p>
-            </>
-          )}
-        </div>
-
-        {continueTopic && (
-          <div className="w-full bg-primary-content/20 rounded-full h-1.5">
-            <div
-              className="bg-primary-content rounded-full h-1.5"
-              style={{ width: `${Math.min(100, Math.round(continueScore ?? 40))}%` }}
-            />
-          </div>
-        )}
-
-        <span className="self-start px-4 py-2 rounded-xl bg-primary-content text-primary text-sm font-semibold">
-          {continueTopic ? 'Continue →' : 'Start a Quest →'}
-        </span>
-      </Link>
+      {/* ── Rotating CTA ── */}
+      <RotatingCTA
+        continueTopic={continueTopic || undefined}
+        continueSubject={continueSubject || undefined}
+        continueScore={continueScore}
+        subjectLabel={SUBJECT_LABEL[continueSubject] ?? continueSubject}
+      />
 
       {/* ── Study grid ── */}
       <div>

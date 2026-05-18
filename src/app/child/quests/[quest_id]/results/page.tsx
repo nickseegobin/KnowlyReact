@@ -2,7 +2,6 @@
 
 import { use, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { confettiBadge, confettiCompletion } from '@/lib/confetti'
 
 interface QuestResult {
@@ -36,12 +35,9 @@ function getTier(score: number): ScoreTier {
 export default function QuestResultsPage({
   params,
 }: {
-  params: Promise<{ subject: string; topic: string; quest_id: string }>
+  params: Promise<{ quest_id: string }>
 }) {
-  const { subject: encodedSubject, topic: encodedTopic, quest_id } = use(params)
-  const subject = decodeURIComponent(encodedSubject)
-  const topic = decodeURIComponent(encodedTopic)
-  const router = useRouter()
+  const { quest_id } = use(params)
 
   const [result, setResult] = useState<QuestResult | null>(null)
   const [animate, setAnimate] = useState(false)
@@ -94,7 +90,7 @@ export default function QuestResultsPage({
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
         <div className="text-5xl">🔍</div>
         <p className="text-base-content/60 text-sm">No result found for this quest.</p>
-        <Link href={`/child/quests/${encodedSubject}/${encodedTopic}`} className="btn btn-primary btn-sm">
+        <Link href="/child/quests" className="btn btn-primary btn-sm">
           Back to Quests
         </Link>
       </div>
@@ -220,10 +216,10 @@ export default function QuestResultsPage({
 
         {/* CTAs */}
         <div className="flex flex-col gap-2 pb-6">
-          <Link href={`/child/quests/${encodedSubject}/${encodedTopic}`} className="btn btn-primary w-full">
+          <Link href="/child/quests" className="btn btn-primary w-full">
             Back to Quests
           </Link>
-          <Link href={`/child/quests/${encodedSubject}/${encodedTopic}/${quest_id}`} className="btn btn-ghost w-full">
+          <Link href={`/child/quests/${quest_id}`} className="btn btn-ghost w-full">
             Try Again
           </Link>
           <Link href="/child/home" className="btn btn-ghost btn-sm text-base-content/40">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 
@@ -36,7 +36,7 @@ const EMPTY_BILLING: BillingForm = {
   country: 'TT',
 }
 
-export default function CheckoutPage() {
+function CheckoutForm() {
   const router        = useRouter()
   const searchParams  = useSearchParams()
   const productId     = searchParams.get('product_id')
@@ -47,7 +47,6 @@ export default function CheckoutPage() {
   const [error,      setError]      = useState('')
   const [billing,    setBilling]    = useState<BillingForm>(EMPTY_BILLING)
 
-  // Load the selected product
   useEffect(() => {
     if (!productId) { router.replace('/parent-profile/gems'); return }
 
@@ -63,7 +62,6 @@ export default function CheckoutPage() {
       .finally(() => setLoadingProduct(false))
   }, [productId, router])
 
-  // Pre-fill name + email from user session
   useEffect(() => {
     fetch('/api/auth/me')
       .then((r) => r.json())
@@ -109,7 +107,6 @@ export default function CheckoutPage() {
         return
       }
 
-      // Stash order details for the confirm page (avoids another API call)
       sessionStorage.setItem('knowly_pending_order', JSON.stringify({
         order_id:     data.order_id,
         order_key:    data.order_key,
@@ -138,14 +135,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto py-4 flex flex-col gap-6">
-
-      {/* Back + title */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="btn btn-ghost btn-sm btn-square">←</button>
-        <h1 className="text-xl font-bold">Checkout</h1>
-      </div>
-
+    <>
       {/* Selected product */}
       {product && (
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center gap-4">
@@ -216,6 +206,23 @@ export default function CheckoutPage() {
             : 'Review Order →'}
         </button>
       </form>
+    </>
+  )
+}
+
+export default function CheckoutPage() {
+  const router = useRouter()
+
+  return (
+    <div className="max-w-lg mx-auto py-4 flex flex-col gap-6">
+      <div className="flex items-center gap-3">
+        <button onClick={() => router.back()} className="btn btn-ghost btn-sm btn-square">←</button>
+        <h1 className="text-xl font-bold">Checkout</h1>
+      </div>
+
+      <Suspense fallback={<div className="flex justify-center py-16"><span className="loading loading-spinner loading-lg" /></div>}>
+        <CheckoutForm />
+      </Suspense>
     </div>
   )
 }

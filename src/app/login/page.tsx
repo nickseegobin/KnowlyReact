@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function LoginPage() {
+function LoginForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const nextPath     = searchParams.get('next')
@@ -32,13 +32,11 @@ export default function LoginPage() {
         return
       }
 
-      // If the middleware bounced us here from a protected page, go back there
       if (nextPath) {
         router.push(nextPath)
         return
       }
 
-      // Route by role
       if (data.role === 'teacher') {
         router.push(
           data.approval_status === 'approved' ? '/teacher/home' : '/waiting-approval'
@@ -54,6 +52,51 @@ export default function LoginPage() {
   }
 
   return (
+    <form onSubmit={handleSubmit} className="w-full flex flex-col gap-3">
+      <input
+        type="text"
+        placeholder="Email"
+        className="input input-bordered w-full"
+        value={form.username}
+        onChange={(e) => setForm({ ...form, username: e.target.value })}
+        autoComplete="email"
+        required
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        className="input input-bordered w-full"
+        value={form.password}
+        onChange={(e) => setForm({ ...form, password: e.target.value })}
+        autoComplete="current-password"
+        required
+      />
+
+      <div className="text-center">
+        <Link href="/forgot-password" className="text-sm text-base-content/50 hover:text-base-content">
+          Forgot Password?
+        </Link>
+      </div>
+
+      {error && (
+        <div className="alert alert-error py-2 text-sm">
+          <span>{error}</span>
+        </div>
+      )}
+
+      <button
+        type="submit"
+        className="btn btn-neutral btn-lg w-full mt-2"
+        disabled={loading}
+      >
+        {loading ? <span className="loading loading-spinner loading-sm" /> : 'Login'}
+      </button>
+    </form>
+  )
+}
+
+export default function LoginPage() {
+  return (
     <main className="min-h-screen flex items-center justify-center bg-base-100 px-4">
       <div className="w-full max-w-sm flex flex-col items-center gap-6">
         <div className="text-center">
@@ -61,46 +104,9 @@ export default function LoginPage() {
           <p className="text-base-content/60 mt-1">Login</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="w-full flex flex-col gap-3">
-          <input
-            type="text"
-            placeholder="Email"
-            className="input input-bordered w-full"
-            value={form.username}
-            onChange={(e) => setForm({ ...form, username: e.target.value })}
-            autoComplete="email"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            className="input input-bordered w-full"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            autoComplete="current-password"
-            required
-          />
-
-          <div className="text-center">
-            <Link href="/forgot-password" className="text-sm text-base-content/50 hover:text-base-content">
-              Forgot Password?
-            </Link>
-          </div>
-
-          {error && (
-            <div className="alert alert-error py-2 text-sm">
-              <span>{error}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="btn btn-neutral btn-lg w-full mt-2"
-            disabled={loading}
-          >
-            {loading ? <span className="loading loading-spinner loading-sm" /> : 'Login'}
-          </button>
-        </form>
+        <Suspense fallback={<div className="w-full flex flex-col gap-3"><div className="skeleton h-12 w-full" /><div className="skeleton h-12 w-full" /><div className="skeleton h-12 w-full" /></div>}>
+          <LoginForm />
+        </Suspense>
 
         <Link href="/register" className="btn btn-ghost btn-lg w-full border border-base-300">
           Create Account

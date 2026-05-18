@@ -26,7 +26,7 @@ interface ScoreTier {
 function getTier(score: number): ScoreTier {
   if (score >= 90) return { label: 'Outstanding!', emoji: '🏆', color: 'text-warning', bg: 'bg-warning/10 border-warning/30' }
   if (score >= 70) return { label: 'Great job!',   emoji: '🎉', color: 'text-success', bg: 'bg-success/10 border-success/30' }
-  if (score >= 50) return { label: 'Good effort!', emoji: '👍', color: 'text-info',    bg: 'bg-info/10 border-info/30' }
+  if (score >= 50) return { label: 'Good effort!', emoji: '👍', color: 'text-primary', bg: 'bg-primary/10 border-primary/30' }
   return              { label: 'Keep going!',  emoji: '💪', color: 'text-base-content', bg: 'bg-base-200 border-base-300' }
 }
 
@@ -78,7 +78,7 @@ export default function LessonResultsPage({
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
         <div className="text-5xl">🔍</div>
         <p className="text-base-content/60 text-sm">No result found for this lesson.</p>
-        <Link href="/child/lessons" className="btn btn-info btn-sm">
+        <Link href="/child/lessons" className="btn btn-primary btn-sm">
           Back to Lessons
         </Link>
       </div>
@@ -145,7 +145,7 @@ export default function LessonResultsPage({
 
       {/* Gems earned */}
       {(result.gems_awarded ?? 0) > 0 && (
-        <div className="flex items-center gap-3 p-4 rounded-2xl bg-info/10 border border-info/20 animate-fade-in-up">
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-primary/10 border border-primary/20 animate-fade-in-up">
           <div className="flex gap-1">
             {Array.from({ length: Math.min(result.gems_awarded ?? 0, 5) }).map((_, i) => (
               <span
@@ -158,7 +158,7 @@ export default function LessonResultsPage({
             ))}
           </div>
           <div>
-            <p className="font-bold text-info">+{result.gems_awarded} Gems Earned</p>
+            <p className="font-bold text-primary">+{result.gems_awarded} Gems Earned</p>
             <p className="text-xs text-base-content/60">Added to your wallet</p>
           </div>
         </div>
@@ -166,7 +166,7 @@ export default function LessonResultsPage({
 
       {/* CTAs */}
       <div className="flex flex-col gap-2 pb-6">
-        <Link href="/child/lessons" className="btn btn-info w-full text-info-content">
+        <Link href="/child/lessons" className="btn btn-primary w-full text-primary-content">
           Back to Lessons
         </Link>
         <Link href={`/child/lessons/${lesson_id}`} className="btn btn-ghost w-full">

@@ -370,7 +370,7 @@ export default function LessonDetailPage({
   if (phase === 'loading' || phase === 'starting' || phase === 'completing') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <span className="loading loading-ring loading-lg text-info" />
+        <span className="loading loading-ring loading-lg text-primary" />
         <p className="text-base-content/60 text-sm animate-pulse">
           {phase === 'completing' ? 'Saving your progress…' : 'Loading lesson…'}
         </p>
@@ -383,7 +383,7 @@ export default function LessonDetailPage({
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
         <div className="text-5xl">😕</div>
         <p className="text-base-content/60">{error || 'Something went wrong.'}</p>
-        <Link href="/child/lessons" className="btn btn-info btn-sm">Back to Lessons</Link>
+        <Link href="/child/lessons" className="btn btn-primary btn-sm">Back to Lessons</Link>
       </div>
     )
   }
@@ -427,13 +427,13 @@ export default function LessonDetailPage({
               <button
                 key={sec.section_id ?? i}
                 onClick={() => startLesson(i)}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl border bg-base-100 border-base-200 hover:bg-info/5 hover:border-info/30 transition-colors text-left w-full group"
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl border bg-base-100 border-base-200 hover:bg-primary/5 hover:border-primary/30 transition-colors text-left w-full group"
               >
-                <span className="w-7 h-7 rounded-full bg-info/10 text-info flex items-center justify-center text-xs font-bold shrink-0 group-hover:bg-info group-hover:text-info-content transition-colors">
+                <span className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0 group-hover:bg-primary group-hover:text-primary-content transition-colors">
                   {i + 1}
                 </span>
                 <span className="flex-1 text-sm font-medium">{sec.title}</span>
-                <span className="text-xs text-info opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
                   Start →
                 </span>
               </button>
@@ -443,7 +443,7 @@ export default function LessonDetailPage({
 
         {/* Study all option */}
         <button
-          className="btn btn-info w-full text-info-content"
+          className="btn btn-primary w-full text-primary-content"
           onClick={() => startLesson(null)}
         >
           Study All {sections.length > 0 ? `(${sections.length} sub-topics)` : ''}
@@ -466,7 +466,7 @@ export default function LessonDetailPage({
               <div
                 key={i}
                 className={`h-1.5 rounded-full transition-all ${
-                  i < sectionIdx ? 'w-4 bg-success' : i === sectionIdx ? 'w-6 bg-info' : 'w-4 bg-base-300'
+                  i < sectionIdx ? 'w-4 bg-success' : i === sectionIdx ? 'w-6 bg-primary' : 'w-4 bg-base-300'
                 }`}
               />
             ))}
@@ -502,10 +502,10 @@ export default function LessonDetailPage({
             <div className="collapse-content flex flex-col gap-5 pt-1">
               {examples.map((ex, exIdx) => (
                 <div key={exIdx} className="flex flex-col gap-2">
-                  <p className="text-xs font-bold text-info uppercase tracking-wide">Example {ex.example_number}</p>
+                  <p className="text-xs font-bold text-primary uppercase tracking-wide">Example {ex.example_number}</p>
                   <p className="text-xs italic text-base-content/60 leading-relaxed">{ex.context}</p>
                   <p className="text-sm font-semibold">{ex.problem}</p>
-                  <div className="flex flex-col gap-1 pl-3 border-l-2 border-info/30">
+                  <div className="flex flex-col gap-1 pl-3 border-l-2 border-primary/30">
                     {ex.solution.map((step, i) => (
                       <p key={i} className="text-xs text-base-content/80 leading-relaxed">
                         {typeof step === 'string' ? step : (step as Record<string, string>).step ?? JSON.stringify(step)}
@@ -518,7 +518,7 @@ export default function LessonDetailPage({
           </div>
         )}
 
-        <button className="btn btn-info w-full text-info-content" onClick={advanceLesson}>
+        <button className="btn btn-primary w-full text-primary-content" onClick={advanceLesson}>
           {isLastPara ? 'Check Your Understanding →' : 'Next →'}
         </button>
       </div>
@@ -537,14 +537,14 @@ export default function LessonDetailPage({
           <div className="flex gap-1.5 justify-center">
             {sections.map((_, i) => (
               <div key={i} className={`h-1.5 rounded-full transition-all ${
-                i < sectionIdx ? 'w-4 bg-success' : i === sectionIdx ? 'w-6 bg-info' : 'w-4 bg-base-300'
+                i < sectionIdx ? 'w-4 bg-success' : i === sectionIdx ? 'w-6 bg-primary' : 'w-4 bg-base-300'
               }`} />
             ))}
           </div>
         )}
 
         <div>
-          <p className="text-xs text-info uppercase tracking-wide font-semibold">✏️ Check Your Understanding</p>
+          <p className="text-xs text-primary uppercase tracking-wide font-semibold">✏️ Check Your Understanding</p>
           <p className="text-xs text-base-content/40 mt-0.5">
             {currentSection?.title} · Q{checkIdx + 1} of {checks.length}
           </p>
@@ -573,14 +573,14 @@ export default function LessonDetailPage({
                 }}
                 className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-150 active:scale-95 ${
                   isFlashed
-                    ? 'border-info bg-info text-info-content font-semibold scale-[1.01]'
+                    ? 'border-primary bg-primary text-primary-content font-semibold scale-[1.01]'
                     : isOther
                     ? 'border-base-300 bg-base-100 opacity-40'
                     : 'border-base-300 bg-base-100 hover:bg-base-200'
                 }`}
               >
                 <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
-                  isFlashed ? 'bg-info-content/20 text-info-content' : 'bg-base-300'
+                  isFlashed ? 'bg-primary-content/20 text-primary-content' : 'bg-base-300'
                 }`}>{key}</span>
                 <span><QuestionRenderer text={value} /></span>
               </button>
@@ -634,7 +634,7 @@ export default function LessonDetailPage({
           <div className="text-center text-sm font-semibold text-warning">🔥 {combo} in a row!</div>
         )}
 
-        <button className="btn btn-info w-full text-info-content mt-auto" onClick={advanceQuiz}>Continue →</button>
+        <button className="btn btn-primary w-full text-primary-content mt-auto" onClick={advanceQuiz}>Continue →</button>
       </div>
     )
   }
@@ -679,13 +679,13 @@ export default function LessonDetailPage({
                   setTimeout(() => submitReview(key), 400)
                 }}
                 className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-150 active:scale-95 ${
-                  isFlashed ? 'border-info bg-info text-info-content font-semibold scale-[1.01]'
+                  isFlashed ? 'border-primary bg-primary text-primary-content font-semibold scale-[1.01]'
                   : isOther ? 'border-base-300 bg-base-100 opacity-40'
                   : 'border-base-300 bg-base-100 hover:bg-base-200'
                 }`}
               >
                 <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                  isFlashed ? 'bg-info-content/20 text-info-content' : 'bg-base-300'
+                  isFlashed ? 'bg-primary-content/20 text-primary-content' : 'bg-base-300'
                 }`}>{key}</span>
                 <span><QuestionRenderer text={value} /></span>
               </button>
@@ -726,7 +726,7 @@ export default function LessonDetailPage({
         {!reviewCorrect && (
           <p className="text-xs text-base-content/40 text-center">This question will come back around again</p>
         )}
-        <button className="btn btn-info w-full text-info-content mt-auto" onClick={advanceReview}>
+        <button className="btn btn-primary w-full text-primary-content mt-auto" onClick={advanceReview}>
           {wrongPool.length <= 1 && reviewCorrect ? '🎉 Complete Lesson' : 'Continue →'}
         </button>
       </div>

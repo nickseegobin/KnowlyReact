@@ -120,7 +120,7 @@ export default async function LessonsPage({
                 key={subj}
                 href={`/child/lessons?subject=${subj}`}
                 className={`btn btn-sm rounded-full ${
-                  subj === selectedSubject ? 'btn-info' : 'btn-ghost border border-base-300'
+                  subj === selectedSubject ? 'btn-primary' : 'btn-ghost border border-base-300'
                 }`}
               >
                 {SUBJECT_SHORT[subj] ?? subj}
@@ -152,7 +152,7 @@ export default async function LessonsPage({
                       return (
                         <Link key={lesson.quest_id} href={href} className="block">
                           <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border bg-base-100 border-base-200 hover:bg-base-200 transition-colors">
-                            <div className="w-2 h-2 rounded-full shrink-0 bg-info/40" />
+                            <div className="w-2 h-2 rounded-full shrink-0 bg-primary/30" />
                             <span className="flex-1 text-sm font-medium">{topicLabel}</span>
                             <span className="badge badge-sm badge-ghost">Study →</span>
                           </div>

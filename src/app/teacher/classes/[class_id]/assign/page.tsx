@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { BookOpen, ClipboardCheck, ChevronDown, ChevronRight, Check } from 'lucide-react'
 import { LEVELS, PERIODS } from '@/types/knowly'
 
 type TaskType  = 'lesson' | 'trial'
@@ -21,17 +22,17 @@ const DIFFICULTIES = [
 ]
 
 interface LessonEntry {
-  quest_id: string
+  quest_id:      string
   module_number: number
-  module_title: string
-  topic: string
-  subject: string
-  objectives: string[]
+  module_title:  string
+  topic:         string
+  subject:       string
+  objectives:    string[]
 }
 
 interface Module {
   module_number: number
-  module_title: string
+  module_title:  string
 }
 
 export default function AssignActivityPage() {
@@ -41,15 +42,17 @@ export default function AssignActivityPage() {
 
   const [taskType, setTaskType] = useState<TaskType>('lesson')
 
-  // ── Lesson catalogue ─────────────────────────────────────────────────────────
-  const [level, setLevel]     = useState('std_4')
-  const [period, setPeriod]   = useState('')
+  // ── Lesson catalogue ──────────────────────────────────────────────────────
+  const [level,   setLevel]   = useState('std_4')
+  const [period,  setPeriod]  = useState('')
   const [subject, setSubject] = useState('')
-  const [lessons, setLessons]   = useState<LessonEntry[]>([])
+  const [lessons, setLessons] = useState<LessonEntry[]>([])
   const [lessonsLoading, setLessonsLoading] = useState(false)
-  const [selectedLesson, setSelectedLesson] = useState<LessonEntry | null>(null)
+  const [selectedLessons, setSelectedLessons] = useState<LessonEntry[]>([])
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
+  const [sectionSelections, setSectionSelections] = useState<Record<string, number | null>>({})
 
-  // ── Trial fields ─────────────────────────────────────────────────────────────
+  // ── Trial fields ──────────────────────────────────────────────────────────
   const [trialSubject,  setTrialSubject]  = useState('')
   const [trialLevel,    setTrialLevel]    = useState('std_4')
   const [trialPeriod,   setTrialPeriod]   = useState('')
@@ -58,20 +61,21 @@ export default function AssignActivityPage() {
   const [modulesLoading, setModulesLoading] = useState(false)
   const [selectedModules, setSelectedModules] = useState<number[]>([])
 
-  // ── Shared fields ────────────────────────────────────────────────────────────
+  // ── Shared fields ─────────────────────────────────────────────────────────
   const [title,      setTitle]      = useState('')
   const [difficulty, setDifficulty] = useState('easy')
   const [dueDate,    setDueDate]    = useState('')
 
-  // ── Submission ───────────────────────────────────────────────────────────────
-  const [submitting,   setSubmitting]   = useState(false)
-  const [submitError,  setSubmitError]  = useState('')
+  // ── Submission ────────────────────────────────────────────────────────────
+  const [submitting,  setSubmitting]  = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
-  // ── Lesson catalogue fetch ───────────────────────────────────────────────────
+  // ── Lesson catalogue fetch ────────────────────────────────────────────────
   const fetchCatalogue = useCallback(async () => {
     if (taskType !== 'lesson') return
     setLessonsLoading(true)
-    setSelectedLesson(null)
+    setSelectedLessons([])
+    setSectionSelections({})
     try {
       const qs = new URLSearchParams({ level })
       if (period)  qs.set('period', period)
@@ -79,9 +83,11 @@ export default function AssignActivityPage() {
       const res = await fetch(`/api/lessons/teacher/catalogue?${qs}`)
       if (res.ok) {
         const data = await res.json()
-        setLessons(data.lessons ?? [])
+        const fetched: LessonEntry[] = data.lessons ?? []
+        setLessons(fetched)
+        setExpandedModules(new Set(fetched.map(l => l.module_title)))
       }
-    } catch { /* ignore */ }
+    } catch {}
     finally { setLessonsLoading(false) }
   }, [taskType, level, period, subject])
 
@@ -102,7 +108,7 @@ export default function AssignActivityPage() {
       .finally(() => setModulesLoading(false))
   }, [taskType, trialSubject, trialLevel, trialPeriod])
 
-  // ── Auto-generate title when trial selection changes ─────────────────────
+  // ── Auto-generate title (trial) ───────────────────────────────────────────
   useEffect(() => {
     if (taskType !== 'trial') return
     const subLabel = SUBJECTS.find(s => s.value === trialSubject)?.label ?? trialSubject
@@ -116,7 +122,49 @@ export default function AssignActivityPage() {
     }
   }, [taskType, trialScope, selectedModules, trialSubject, modules])
 
-  // ── Toggle module selection ───────────────────────────────────────────────
+  // ── Lesson selection helpers ──────────────────────────────────────────────
+  function toggleLesson(lesson: LessonEntry) {
+    setSelectedLessons(prev => {
+      const exists = prev.some(l => l.quest_id === lesson.quest_id)
+      if (exists) {
+        setSectionSelections(s => { const n = { ...s }; delete n[lesson.quest_id]; return n })
+        return prev.filter(l => l.quest_id !== lesson.quest_id)
+      }
+      return [...prev, lesson]
+    })
+  }
+
+  function toggleModuleGroup(groupLessons: LessonEntry[]) {
+    const allSelected = groupLessons.every(l => selectedLessons.some(s => s.quest_id === l.quest_id))
+    if (allSelected) {
+      setSectionSelections(s => {
+        const n = { ...s }
+        groupLessons.forEach(l => delete n[l.quest_id])
+        return n
+      })
+      setSelectedLessons(prev => prev.filter(l => !groupLessons.some(g => g.quest_id === l.quest_id)))
+    } else {
+      setSelectedLessons(prev => {
+        const toAdd = groupLessons.filter(l => !prev.some(s => s.quest_id === l.quest_id))
+        return [...prev, ...toAdd]
+      })
+    }
+  }
+
+  function setSectionForLesson(questId: string, idx: number | null) {
+    setSectionSelections(prev => ({ ...prev, [questId]: idx }))
+  }
+
+  function toggleExpanded(moduleTitle: string) {
+    setExpandedModules(prev => {
+      const next = new Set(prev)
+      if (next.has(moduleTitle)) next.delete(moduleTitle)
+      else next.add(moduleTitle)
+      return next
+    })
+  }
+
+  // ── Trial module toggle ───────────────────────────────────────────────────
   function toggleModule(num: number) {
     if (trialScope === 'single') {
       setSelectedModules(prev => prev[0] === num ? [] : [num])
@@ -135,54 +183,64 @@ export default function AssignActivityPage() {
   async function submit() {
     setSubmitError('')
 
-    if (taskType === 'lesson' && !selectedLesson) {
-      setSubmitError('Please select a lesson from the catalogue.')
+    if (taskType === 'lesson' && selectedLessons.length === 0) {
+      setSubmitError('Please select at least one lesson.')
       return
     }
-
     if (taskType === 'trial') {
       if (!trialSubject) { setSubmitError('Please select a subject.'); return }
       if (trialScope !== 'general' && selectedModules.length === 0) {
-        setSubmitError('Please select at least one topic.')
-        return
+        setSubmitError('Please select at least one topic.'); return
       }
+      if (!title.trim()) { setSubmitError('Title is required.'); return }
     }
-
-    const taskTitle = taskType === 'lesson'
-      ? (selectedLesson!.module_title || selectedLesson!.topic)
-      : title.trim()
-
-    if (!taskTitle) { setSubmitError('Title is required.'); return }
 
     setSubmitting(true)
     try {
-      const body: Record<string, unknown> = {
-        title:    taskTitle,
-        type:     taskType,
-        due_date: dueDate || undefined,
-      }
-
       if (taskType === 'lesson') {
-        body.reference_id = selectedLesson!.quest_id
-        body.subject      = selectedLesson!.subject
+        for (const lesson of selectedLessons) {
+          const sectionIdx = sectionSelections[lesson.quest_id] ?? null
+          const body: Record<string, unknown> = {
+            title:        lesson.topic || lesson.module_title,
+            type:         'lesson',
+            due_date:     dueDate || undefined,
+            reference_id: lesson.quest_id,
+            subject:      lesson.subject,
+          }
+          if (sectionIdx !== null) body.lesson_section_index = sectionIdx
+          const res = await fetch(`/api/classes/${classId}/tasks`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(body),
+          })
+          if (!res.ok) {
+            const data = await res.json()
+            setSubmitError(data.message ?? 'Failed to assign activity.')
+            return
+          }
+        }
       } else {
-        body.difficulty     = difficulty || undefined
-        body.subject        = trialSubject
-        body.scope          = trialScope === 'general' ? 'period' : 'general_topic'
-        body.module_numbers = trialScope === 'general' ? [] : selectedModules
+        const res = await fetch(`/api/classes/${classId}/tasks`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title:          title.trim(),
+            type:           'trial',
+            due_date:       dueDate || undefined,
+            difficulty:     difficulty || undefined,
+            subject:        trialSubject,
+            scope:          trialScope === 'general' ? 'period' : 'general_topic',
+            module_numbers: trialScope === 'general' ? [] : selectedModules,
+          }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          setSubmitError(data.message ?? 'Failed to assign activity.')
+          return
+        }
       }
 
-      const res = await fetch(`/api/classes/${classId}/tasks`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setSubmitError(data.message ?? 'Failed to assign activity.')
-      } else {
-        router.push(`/teacher/classes/${classId}`)
-      }
+      router.push(`/teacher/classes/${classId}`)
     } catch {
       setSubmitError('Something went wrong.')
     } finally {
@@ -190,30 +248,50 @@ export default function AssignActivityPage() {
     }
   }
 
-  // ── Derived ───────────────────────────────────────────────────────────────
+  // ── Group lessons by module ───────────────────────────────────────────────
+  const moduleGroups: Array<{ title: string; lessons: LessonEntry[] }> = []
+  for (const lesson of lessons) {
+    const key = lesson.module_title ?? 'Other'
+    const existing = moduleGroups.find(g => g.title === key)
+    if (existing) existing.lessons.push(lesson)
+    else moduleGroups.push({ title: key, lessons: [lesson] })
+  }
+
   const canSubmit =
     taskType === 'lesson'
-      ? !!selectedLesson
+      ? selectedLessons.length > 0
       : !!trialSubject && (trialScope === 'general' || selectedModules.length > 0)
 
   return (
-    <div className="max-w-sm mx-auto w-full px-4 py-6 flex flex-col gap-6">
+    <div className="max-w-2xl mx-auto w-full px-4 py-6 flex flex-col gap-6">
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="text-base-content/50 hover:text-base-content">←</button>
+        <button onClick={() => router.back()} className="text-base-content/50 hover:text-base-content transition-colors">←</button>
         <div>
           <h1 className="text-2xl font-bold">Assign Activity</h1>
-          <p className="text-sm text-base-content/50">Choose a lesson or create a trial</p>
+          <p className="text-sm text-base-content/50">Choose lessons or create a trial for your class</p>
         </div>
       </div>
 
       {/* Type toggle */}
-      <div className="tabs tabs-boxed">
-        <button className={`tab flex-1 ${taskType === 'lesson' ? 'tab-active' : ''}`} onClick={() => setTaskType('lesson')}>
-          Lesson
+      <div className="flex gap-2">
+        <button
+          onClick={() => setTaskType('lesson')}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold text-sm transition-colors ${
+            taskType === 'lesson' ? 'bg-primary text-primary-content' : 'bg-base-200 hover:bg-base-300'
+          }`}
+        >
+          <BookOpen size={16} />
+          Lessons
         </button>
-        <button className={`tab flex-1 ${taskType === 'trial' ? 'tab-active' : ''}`} onClick={() => setTaskType('trial')}>
+        <button
+          onClick={() => setTaskType('trial')}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold text-sm transition-colors ${
+            taskType === 'trial' ? 'bg-warning text-warning-content' : 'bg-base-200 hover:bg-base-300'
+          }`}
+        >
+          <ClipboardCheck size={16} />
           Trial
         </button>
       </div>
@@ -221,6 +299,8 @@ export default function AssignActivityPage() {
       {/* ── Lesson flow ── */}
       {taskType === 'lesson' && (
         <div className="flex flex-col gap-4">
+
+          {/* Filter */}
           <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
             <p className="font-semibold text-sm">Filter Catalogue</p>
             <div className="grid grid-cols-2 gap-2">
@@ -238,35 +318,174 @@ export default function AssignActivityPage() {
             </select>
           </div>
 
-          <div className="flex flex-col gap-2">
-            {lessonsLoading ? (
-              <div className="flex justify-center py-6"><span className="loading loading-spinner loading-md" /></div>
-            ) : lessons.length === 0 ? (
-              <div className="bg-base-200 rounded-2xl p-6 text-center text-sm text-base-content/50">No lessons found for these filters.</div>
-            ) : (
-              lessons.map((l) => (
-                <button
-                  key={l.quest_id}
-                  onClick={() => setSelectedLesson(selectedLesson?.quest_id === l.quest_id ? null : l)}
-                  className={`rounded-xl px-4 py-3 text-left transition-colors ${selectedLesson?.quest_id === l.quest_id ? 'bg-neutral text-neutral-content' : 'bg-base-200 hover:bg-base-300'}`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-sm">{l.module_title}</p>
-                    <span className="badge badge-sm shrink-0">{subjectLabel(l.subject)}</span>
-                  </div>
-                  {l.topic && <p className="text-xs opacity-60 mt-0.5">{l.topic}</p>}
-                </button>
-              ))
-            )}
-          </div>
+          {/* Catalogue — grouped by module */}
+          {lessonsLoading ? (
+            <div className="flex justify-center py-8">
+              <span className="loading loading-spinner loading-md" />
+            </div>
+          ) : moduleGroups.length === 0 ? (
+            <div className="bg-base-200 rounded-2xl p-8 text-center text-sm text-base-content/50">
+              No lessons found for these filters.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {moduleGroups.map(({ title: moduleTitle, lessons: groupLessons }) => {
+                const allSelected = groupLessons.every(l => selectedLessons.some(s => s.quest_id === l.quest_id))
+                const someSelected = !allSelected && groupLessons.some(l => selectedLessons.some(s => s.quest_id === l.quest_id))
+                const isExpanded = expandedModules.has(moduleTitle)
 
-          {selectedLesson && (
-            <div className="bg-base-200 rounded-2xl p-3 text-sm">
-              <p className="font-semibold text-xs text-base-content/50 uppercase tracking-wide mb-1">Selected Lesson</p>
-              <p className="font-semibold">{selectedLesson.module_title}</p>
-              <p className="text-xs text-base-content/50">{subjectLabel(selectedLesson.subject)} · {selectedLesson.topic}</p>
+                return (
+                  <div key={moduleTitle} className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2 px-1 mb-1">
+                      <button
+                        onClick={() => toggleExpanded(moduleTitle)}
+                        className="flex items-center gap-1.5 flex-1 text-left min-w-0"
+                      >
+                        {isExpanded
+                          ? <ChevronDown size={13} className="text-base-content/40 shrink-0" />
+                          : <ChevronRight size={13} className="text-base-content/40 shrink-0" />}
+                        <p className="text-xs font-bold text-base-content/40 uppercase tracking-wider truncate">
+                          {moduleTitle}
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => toggleModuleGroup(groupLessons)}
+                        className={`text-xs font-medium px-2.5 py-0.5 rounded-full transition-colors shrink-0 ${
+                          allSelected
+                            ? 'bg-primary text-primary-content'
+                            : someSelected
+                            ? 'bg-primary/20 text-primary'
+                            : 'text-base-content/40 hover:text-primary hover:bg-primary/10'
+                        }`}
+                      >
+                        {allSelected ? 'Deselect all' : 'Select all'}
+                      </button>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="flex flex-col gap-1.5">
+                        {groupLessons.map((lesson) => {
+                          const isSelected = selectedLessons.some(l => l.quest_id === lesson.quest_id)
+                          const topicLabel = lesson.topic || lesson.module_title
+                          const sectionCount = lesson.objectives?.length ?? 0
+                          return (
+                            <button
+                              key={lesson.quest_id}
+                              onClick={() => toggleLesson(lesson)}
+                              className={`flex items-start gap-3 px-4 py-3 rounded-2xl border text-left transition-colors ${
+                                isSelected
+                                  ? 'bg-primary/10 border-primary/30'
+                                  : 'bg-base-100 border-base-200 hover:bg-base-200'
+                              }`}
+                            >
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                                isSelected ? 'bg-primary border-primary' : 'border-base-300'
+                              }`}>
+                                {isSelected && <Check size={11} className="text-primary-content" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium">{topicLabel}</p>
+                                {sectionCount > 0 && (
+                                  <p className="text-xs text-base-content/40 mt-0.5">
+                                    {sectionCount} section{sectionCount !== 1 ? 's' : ''}
+                                  </p>
+                                )}
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
+
+          {/* Selection summary with per-lesson section picker */}
+          {selectedLessons.length > 0 && (
+            <div className="bg-primary/10 border border-primary/20 rounded-2xl p-3 flex flex-col gap-3">
+              <p className="text-xs font-semibold text-primary">
+                {selectedLessons.length} sub-topic{selectedLessons.length !== 1 ? 's' : ''} selected
+              </p>
+              <div className="flex flex-col gap-2">
+                {selectedLessons.map(l => {
+                  const sectionIdx = sectionSelections[l.quest_id] ?? null
+                  const objectives = l.objectives ?? []
+                  const topicLabel = l.topic || l.module_title
+                  return (
+                    <div key={l.quest_id} className="bg-base-100 rounded-xl p-3 flex flex-col gap-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold truncate">{topicLabel}</p>
+                          <p className="text-xs text-base-content/40 mt-0.5">
+                            {objectives.length > 0
+                              ? sectionIdx !== null
+                                ? `Section ${sectionIdx + 1} of ${objectives.length}`
+                                : `All ${objectives.length} sections`
+                              : 'Full lesson'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => toggleLesson(l)}
+                          className="text-xs text-base-content/30 hover:text-error transition-colors shrink-0 mt-0.5"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      {objectives.length > 1 && (
+                        <div className="flex flex-col gap-1">
+                          <p className="text-xs text-base-content/40 font-medium">Assign section:</p>
+                          <div className="flex gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => setSectionForLesson(l.quest_id, null)}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                sectionIdx === null
+                                  ? 'bg-primary text-primary-content border-primary'
+                                  : 'border-base-300 hover:border-primary/50 text-base-content/60'
+                              }`}
+                            >
+                              All
+                            </button>
+                            {objectives.map((obj: string, i: number) => (
+                              <button
+                                key={i}
+                                onClick={() => setSectionForLesson(l.quest_id, i)}
+                                title={obj}
+                                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                  sectionIdx === i
+                                    ? 'bg-primary text-primary-content border-primary'
+                                    : 'border-base-300 hover:border-primary/50 text-base-content/60'
+                                }`}
+                              >
+                                §{i + 1}
+                              </button>
+                            ))}
+                          </div>
+                          {sectionIdx !== null && objectives[sectionIdx] && (
+                            <p className="text-xs text-primary/70 leading-snug mt-0.5">
+                              §{sectionIdx + 1} — {objectives[sectionIdx]}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Due date */}
+          <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-2">
+            <p className="font-semibold text-sm">Due Date (optional)</p>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="input input-bordered input-sm w-full"
+            />
+          </div>
         </div>
       )}
 
@@ -274,7 +493,6 @@ export default function AssignActivityPage() {
       {taskType === 'trial' && (
         <div className="flex flex-col gap-4">
 
-          {/* Subject + Level + Period */}
           <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
             <p className="font-semibold text-sm">Curriculum</p>
             <select
@@ -296,7 +514,6 @@ export default function AssignActivityPage() {
             </div>
           </div>
 
-          {/* Trial flavour */}
           <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
             <p className="font-semibold text-sm">Trial Type</p>
             <div className="flex gap-2 flex-wrap">
@@ -318,7 +535,6 @@ export default function AssignActivityPage() {
                 : 'Select two or more modules — questions span the chosen topics.'}
             </p>
 
-            {/* Module pills */}
             {trialScope !== 'general' && trialSubject && (
               <div className="flex flex-col gap-2">
                 {modulesLoading ? (
@@ -341,17 +557,13 @@ export default function AssignActivityPage() {
               </div>
             )}
 
-            {/* Selection summary */}
             {trialScope !== 'general' && selectedModules.length > 0 && (
               <p className="text-xs text-base-content/50 text-center">
-                {selectedModules.length === 1
-                  ? `1 topic selected`
-                  : `${selectedModules.length} topics selected`}
+                {selectedModules.length === 1 ? '1 topic selected' : `${selectedModules.length} topics selected`}
               </p>
             )}
           </div>
 
-          {/* Difficulty — trial only */}
           <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
             <p className="font-semibold text-sm">Settings</p>
             <input
@@ -375,24 +587,22 @@ export default function AssignActivityPage() {
         </div>
       )}
 
-      {/* Due date — lesson only (no title/difficulty needed) */}
-      {taskType === 'lesson' && (
-        <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
-          <p className="font-semibold text-sm">Settings</p>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="input input-bordered input-sm w-full"
-          />
-        </div>
-      )}
-
       {submitError && <p className="text-error text-xs">{submitError}</p>}
 
-      <button onClick={submit} disabled={submitting || !canSubmit} className="btn btn-neutral w-full">
-        {submitting ? <span className="loading loading-spinner loading-xs" /> : 'Assign Activity'}
+      <button
+        onClick={submit}
+        disabled={submitting || !canSubmit}
+        className="btn btn-primary w-full text-primary-content"
+      >
+        {submitting ? (
+          <span className="loading loading-spinner loading-xs" />
+        ) : taskType === 'lesson' && selectedLessons.length > 0 ? (
+          `Assign ${selectedLessons.length} Sub-Topic${selectedLessons.length !== 1 ? 's' : ''}`
+        ) : (
+          'Assign Activity'
+        )}
       </button>
+
     </div>
   )
 }

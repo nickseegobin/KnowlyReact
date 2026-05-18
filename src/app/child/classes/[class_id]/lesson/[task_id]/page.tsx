@@ -70,6 +70,8 @@ export default function ClassLessonPage({
   const title   = searchParams.get('title')   ?? 'Lesson'
   const subject = searchParams.get('subject') ?? ''
   const refId   = searchParams.get('ref')     ?? ''
+  const sectionParam = searchParams.get('section')
+  const singleSection: number | null = sectionParam !== null ? parseInt(sectionParam, 10) : null
 
   const [phase, setPhase]       = useState<Phase>(refId ? 'loading' : 'error')
   const [lesson, setLesson]     = useState<LessonData | null>(null)
@@ -130,7 +132,7 @@ export default function ClassLessonPage({
       const data = await res.json()
       if (!res.ok) throw new Error(data.message ?? 'Failed to start lesson')
       setSessionId(data.session_id)
-      setSectionIdx(0)
+      setSectionIdx(singleSection ?? 0)
       setParaIdx(0)
       setCheckIdx(0)
       setWrongPool([])
@@ -147,12 +149,13 @@ export default function ClassLessonPage({
       return
     }
     const checks = currentSection?.knowledge_check ?? []
+    const isLastSection = singleSection !== null || sectionIdx + 1 >= sections.length
     if (checks.length > 0) {
       setCheckIdx(0)
       setSelected(null)
       setIsCorrect(null)
       setPhase('quiz')
-    } else if (sectionIdx + 1 < sections.length) {
+    } else if (!isLastSection) {
       setSectionIdx((i) => i + 1)
       setParaIdx(0)
       setCheckIdx(0)
@@ -174,12 +177,13 @@ export default function ClassLessonPage({
 
   function advanceQuiz() {
     const checks = currentSection?.knowledge_check ?? []
+    const isLastSection = singleSection !== null || sectionIdx + 1 >= sections.length
     if (checkIdx + 1 < checks.length) {
       setCheckIdx((i) => i + 1)
       setSelected(null)
       setIsCorrect(null)
       setPhase('quiz')
-    } else if (sectionIdx + 1 < sections.length) {
+    } else if (!isLastSection) {
       setSectionIdx((i) => i + 1)
       setParaIdx(0)
       setCheckIdx(0)
@@ -268,6 +272,9 @@ export default function ClassLessonPage({
   }
 
   if (phase === 'confirm') {
+    const displaySections = singleSection !== null
+      ? sections.filter((_, i) => i === singleSection)
+      : sections
     return (
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
@@ -278,19 +285,27 @@ export default function ClassLessonPage({
         <div>
           {subject && <span className="badge badge-ghost badge-sm mb-2">{subject}</span>}
           <h1 className="text-2xl font-bold">{lesson?.module_title ?? lesson?.title ?? title}</h1>
-          <p className="text-base-content/60 text-sm mt-1">{sections.length} section{sections.length !== 1 ? 's' : ''}</p>
+          <p className="text-base-content/60 text-sm mt-1">
+            {singleSection !== null
+              ? `Section ${singleSection + 1} only`
+              : `${sections.length} section${sections.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
 
-        {sections.length > 0 && (
+        {displaySections.length > 0 && (
           <div className="flex flex-col gap-2">
-            {sections.map((s, i) => (
-              <div key={s.section_number ?? i} className="flex items-center gap-3 p-3 rounded-xl bg-base-200">
-                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                  {s.section_number ?? i + 1}
+            {displaySections.map((s, i) => {
+              const globalIdx = singleSection !== null ? singleSection : i
+              return (
+                <div key={s.section_number ?? globalIdx} className={`flex items-center gap-3 p-3 rounded-xl ${singleSection !== null ? 'bg-primary/10 border border-primary/20' : 'bg-base-200'}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${singleSection !== null ? 'bg-primary text-primary-content' : 'bg-primary/20 text-primary'}`}>
+                    {s.section_number ?? globalIdx + 1}
+                  </div>
+                  <p className="text-sm font-medium">{s.title}</p>
+                  {singleSection !== null && <span className="badge badge-primary badge-sm ml-auto">Assigned</span>}
                 </div>
-                <p className="text-sm font-medium">{s.title}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -299,7 +314,7 @@ export default function ClassLessonPage({
         <div className="sticky bottom-0 bg-base-100 pt-3 pb-2 -mx-4 px-4 border-t border-base-200">
           <p className="text-xs text-base-content/50 mb-3">Assigned by your teacher — no gems required</p>
           <button className="btn btn-primary w-full" onClick={startLesson}>
-            ▶ Start Lesson
+            ▶ {singleSection !== null ? `Start Section ${singleSection + 1}` : 'Start Lesson'}
           </button>
         </div>
       </div>

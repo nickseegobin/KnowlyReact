@@ -13,6 +13,7 @@ interface Task {
   difficulty?: 'easy' | 'medium' | 'hard'
   type: string
   reference_id?: string
+  lesson_section_index?: number | null
   due_date?: string
   gem_reward?: number
   status: string
@@ -165,8 +166,13 @@ export default async function ClassDetailPage({
         ) : (
           <div className="flex flex-col gap-3">
             {lessons.map((task) => {
+              const lessonHref = (() => {
+                let h = `/child/classes/${class_id}/lesson/${task.id}?ref=${encodeURIComponent(task.reference_id ?? '')}&title=${encodeURIComponent(task.title)}&subject=${encodeURIComponent(task.subject ?? '')}`
+                if (task.lesson_section_index != null) h += `&section=${task.lesson_section_index}`
+                return h
+              })()
               const href = task.type === 'lesson'
-                ? `/child/classes/${class_id}/lesson/${task.id}?ref=${encodeURIComponent(task.reference_id ?? '')}&title=${encodeURIComponent(task.title)}&subject=${encodeURIComponent(task.subject ?? '')}`
+                ? lessonHref
                 : `/child/classes/${class_id}/quest/${task.id}?subject=${encodeURIComponent(task.subject ?? '')}&difficulty=${task.difficulty ?? 'easy'}&title=${encodeURIComponent(task.title)}&reward=${task.gem_reward ?? 0}&ref=${encodeURIComponent(task.reference_id ?? '')}`
               return task.completed ? (
                 <div

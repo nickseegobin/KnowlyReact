@@ -92,6 +92,9 @@ export default function LessonDetailPage({
   const [sessionId, setSessionId] = useState<string | number | null>(null)
   const [error, setError] = useState('')
 
+  // null = play all; number = play only that section index
+  const [singleSection, setSingleSection] = useState<number | null>(null)
+
   // ── Lesson state ──────────────────────────────────────────────────────────
   const [sectionIdx, setSectionIdx] = useState(0)
   const [paraIdx, setParaIdx] = useState(0)
@@ -179,7 +182,9 @@ export default function LessonDetailPage({
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  async function startLesson() {
+  // section = which section to play; null = play all
+  async function startLesson(section: number | null = null) {
+    setSingleSection(section)
     setPhase('starting')
     setError('')
     try {
@@ -194,7 +199,7 @@ export default function LessonDetailPage({
         window.dispatchEvent(new CustomEvent('knowly:gem-update', { detail: { balance: data.balance_after } }))
       }
       setSessionId(data.session_id)
-      setSectionIdx(0)
+      setSectionIdx(section ?? 0)
       setParaIdx(0)
       setCheckIdx(0)
       setWrongPool([])
@@ -203,6 +208,7 @@ export default function LessonDetailPage({
       setPhase('lesson')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start lesson')
+      setSingleSection(null)
       setPhase('confirm')
     }
   }
@@ -219,13 +225,14 @@ export default function LessonDetailPage({
       setIsCorrect(null)
       setPhase('quiz')
     } else {
-      if (sectionIdx + 1 < sections.length) {
+      const isSessionDone = singleSection !== null || sectionIdx + 1 >= sections.length
+      if (isSessionDone) {
+        wrongPool.length > 0 ? setPhase('review') : completeLesson()
+      } else {
         setSectionIdx((i) => i + 1)
         setParaIdx(0)
         setCheckIdx(0)
         setPhase('lesson')
-      } else {
-        wrongPool.length > 0 ? setPhase('review') : completeLesson()
       }
     }
   }
@@ -257,15 +264,8 @@ export default function LessonDetailPage({
       setIsCorrect(null)
       setPhase('quiz')
     } else {
-      if (sectionIdx + 1 < sections.length) {
-        setSectionIdx((i) => i + 1)
-        setParaIdx(0)
-        setCheckIdx(0)
-        setSelected(null)
-        setFlashSelected(null)
-        setIsCorrect(null)
-        setPhase('lesson')
-      } else {
+      const isSessionDone = singleSection !== null || sectionIdx + 1 >= sections.length
+      if (isSessionDone) {
         if (wrongPool.length > 0) {
           setReviewIdx(0)
           setReviewSelected(null)
@@ -275,6 +275,14 @@ export default function LessonDetailPage({
         } else {
           completeLesson()
         }
+      } else {
+        setSectionIdx((i) => i + 1)
+        setParaIdx(0)
+        setCheckIdx(0)
+        setSelected(null)
+        setFlashSelected(null)
+        setIsCorrect(null)
+        setPhase('lesson')
       }
     }
   }
@@ -322,15 +330,16 @@ export default function LessonDetailPage({
         body: JSON.stringify({ session_id: sessionId }),
       })
       const data = await res.json()
+      const activeSection = singleSection !== null ? sections[singleSection] : null
       sessionStorage.setItem(
         `quest_result_${lesson_id}`,
         JSON.stringify({
           quest_id: lesson_id,
-          title: lesson?.module_title ?? lesson?.title ?? lesson_id,
+          title: activeSection?.title ?? lesson?.module_title ?? lesson?.title ?? lesson_id,
           subject: lesson?.subject ?? '',
-          topic: topicParam || lesson?.topic || '',
-          sections_total: sections.length,
-          sections_completed: sections.length,
+          topic: topicParam || activeSection?.title || lesson?.topic || '',
+          sections_total: singleSection !== null ? 1 : sections.length,
+          sections_completed: singleSection !== null ? 1 : sections.length,
           badge_name: null,
           badge_earned: false,
           gems_awarded: data.gems_awarded ?? 0,
@@ -379,10 +388,10 @@ export default function LessonDetailPage({
     )
   }
 
-  // ── Confirm (pre-start) ───────────────────────────────────────────────────
+  // ── Confirm — section picker ──────────────────────────────────────────────
   if (phase === 'confirm') {
     const moduleTitle = lesson?.module_title ?? lesson?.title ?? lesson_id
-    const topicTitle = topicParam || lesson?.topic || moduleTitle
+    const topicTitle  = topicParam || lesson?.topic || moduleTitle
 
     return (
       <div className="flex flex-col gap-5 animate-fade-in-up">
@@ -396,28 +405,7 @@ export default function LessonDetailPage({
           )}
           <p className="text-sm text-base-content/40 font-medium mb-0.5">{moduleTitle}</p>
           <h1 className="text-2xl font-bold">{topicTitle}</h1>
-          {sections.length > 0 && (
-            <p className="text-xs text-base-content/40 mt-1">
-              {sections.length} section{sections.length !== 1 ? 's' : ''}
-            </p>
-          )}
         </div>
-
-        {sections.length > 1 && (
-          <div className="flex gap-2 flex-wrap">
-            {sections.map((s, i) => (
-              <div
-                key={s.section_id ?? i}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-base-200 text-xs font-medium"
-              >
-                <span className="w-4 h-4 rounded-full bg-base-300 flex items-center justify-center text-[10px] font-bold">
-                  {i + 1}
-                </span>
-                {s.title}
-              </div>
-            ))}
-          </div>
-        )}
 
         <div className="flex items-center gap-3 p-4 rounded-2xl bg-base-200">
           <span className="text-2xl">💎</span>
@@ -429,8 +417,36 @@ export default function LessonDetailPage({
 
         {error && <div className="alert alert-error text-sm py-2">{error}</div>}
 
-        <button className="btn btn-info w-full text-info-content" onClick={startLesson}>
-          ▶ Start Lesson
+        {/* Section picker — one card per sub-topic */}
+        {sections.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-base-content/40">
+              Pick a sub-topic
+            </p>
+            {sections.map((sec, i) => (
+              <button
+                key={sec.section_id ?? i}
+                onClick={() => startLesson(i)}
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl border bg-base-100 border-base-200 hover:bg-info/5 hover:border-info/30 transition-colors text-left w-full group"
+              >
+                <span className="w-7 h-7 rounded-full bg-info/10 text-info flex items-center justify-center text-xs font-bold shrink-0 group-hover:bg-info group-hover:text-info-content transition-colors">
+                  {i + 1}
+                </span>
+                <span className="flex-1 text-sm font-medium">{sec.title}</span>
+                <span className="text-xs text-info opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
+                  Start →
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Study all option */}
+        <button
+          className="btn btn-info w-full text-info-content"
+          onClick={() => startLesson(null)}
+        >
+          Study All {sections.length > 0 ? `(${sections.length} sub-topics)` : ''}
         </button>
       </div>
     )
@@ -439,11 +455,12 @@ export default function LessonDetailPage({
   // ── Lesson ────────────────────────────────────────────────────────────────
   if (phase === 'lesson') {
     const examples = currentSection?.worked_examples ?? []
+    const showProgress = totalSections > 1 && singleSection === null
     return (
       <div key={`lesson-${sectionIdx}`} className="flex flex-col gap-4 min-h-[calc(100vh-8rem)] animate-fade-in-up">
         {ComboToast}
 
-        {totalSections > 1 && (
+        {showProgress && (
           <div className="flex gap-1.5 justify-center">
             {sections.map((_, i) => (
               <div
@@ -458,7 +475,9 @@ export default function LessonDetailPage({
 
         <div>
           <p className="text-xs text-base-content/40 uppercase tracking-wide font-medium">
-            {totalSections > 1 ? `Section ${sectionIdx + 1} of ${totalSections}` : 'Lesson'}
+            {singleSection !== null
+              ? 'Sub-topic'
+              : totalSections > 1 ? `Section ${sectionIdx + 1} of ${totalSections}` : 'Lesson'}
           </p>
           <h2 className="text-xl font-bold mt-0.5">{currentSection?.title}</h2>
         </div>
@@ -509,11 +528,12 @@ export default function LessonDetailPage({
   // ── Quiz ──────────────────────────────────────────────────────────────────
   if (phase === 'quiz') {
     const checks = currentSection?.knowledge_check ?? []
+    const showProgress = totalSections > 1 && singleSection === null
     return (
       <div key={`quiz-${sectionIdx}-${checkIdx}`} className="flex flex-col gap-4 min-h-[calc(100vh-8rem)] animate-fade-in-up">
         {ComboToast}
 
-        {totalSections > 1 && (
+        {showProgress && (
           <div className="flex gap-1.5 justify-center">
             {sections.map((_, i) => (
               <div key={i} className={`h-1.5 rounded-full transition-all ${

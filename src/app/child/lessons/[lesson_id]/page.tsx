@@ -1,9 +1,8 @@
 'use client'
 
 import { use, useState, useEffect, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import Breadcrumb from '@/components/child/Breadcrumb'
 import QuestionRenderer from '@/components/QuestionRenderer'
 import { haptic, HAPTIC_CORRECT, HAPTIC_WRONG, HAPTIC_COMPLETE, HAPTIC_SELECT } from '@/lib/haptic'
 import { soundCorrect, soundWrong, soundComplete, soundSelect } from '@/lib/sound'
@@ -38,7 +37,7 @@ interface Section {
   objectives_covered?: string[]
 }
 
-interface QuestData {
+interface LessonData {
   quest_id: string
   module_title?: string
   title?: string
@@ -47,7 +46,6 @@ interface QuestData {
   content?: { sections: Section[] }
   sections?: Section[]
   gem_cost?: number
-  badge_name?: string
 }
 
 interface WrongItem {
@@ -77,25 +75,19 @@ const COMBO_MESSAGES: Record<number, string> = {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function TopicDetailPage({
+export default function LessonDetailPage({
   params,
 }: {
-  params: Promise<{ subject: string; topic: string; quest_id: string }>
+  params: Promise<{ lesson_id: string }>
 }) {
-  const { subject: encodedSubject, topic: encodedTopic, quest_id } = use(params)
-  const subject = decodeURIComponent(encodedSubject)
-  const topic = decodeURIComponent(encodedTopic)
+  const { lesson_id } = use(params)
   const router = useRouter()
-
-  const SUBJECT_SLUG: Record<string, string> = {
-    'Mathematics': 'math', 'English Language Arts': 'english',
-    'Language Arts': 'english', 'Science': 'science', 'Social Studies': 'social_studies',
-  }
-  const subjectSlug = SUBJECT_SLUG[subject] ?? subject.toLowerCase().replace(/\s+/g, '_')
+  const searchParams = useSearchParams()
+  const topicParam = searchParams.get('topic') ?? ''
 
   // ── Core state ────────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('loading')
-  const [quest, setQuest] = useState<QuestData | null>(null)
+  const [lesson, setLesson] = useState<LessonData | null>(null)
   const [sections, setSections] = useState<Section[]>([])
   const [sessionId, setSessionId] = useState<string | number | null>(null)
   const [error, setError] = useState('')
@@ -124,14 +116,14 @@ export default function TopicDetailPage({
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [shaking, setShaking] = useState(false)
 
-  // ── Load quest ────────────────────────────────────────────────────────────
+  // ── Load lesson ───────────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/lessons/${quest_id}`)
+        const res = await fetch(`/api/lessons/${lesson_id}`)
         if (!res.ok) throw new Error('Lesson not found')
-        const data: QuestData = await res.json()
-        setQuest(data)
+        const data: LessonData = await res.json()
+        setLesson(data)
         const raw = data.content?.sections ?? data.sections ?? []
         const s = raw.map((sec) => ({
           ...sec,
@@ -141,12 +133,12 @@ export default function TopicDetailPage({
         setSections(s)
         setPhase('confirm')
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load quest')
+        setError(e instanceof Error ? e.message : 'Failed to load lesson')
         setPhase('error')
       }
     }
     load()
-  }, [quest_id])
+  }, [lesson_id])
 
   // ── Derived helpers ───────────────────────────────────────────────────────
   const currentSection = sections[sectionIdx]
@@ -154,7 +146,6 @@ export default function TopicDetailPage({
   const isLastPara = paraIdx >= (currentSection?.explanation?.length ?? 1) - 1
   const currentCheck = currentSection?.knowledge_check?.[checkIdx]
   const totalSections = sections.length
-  const completedSections = sectionIdx
 
   // ── Gamification helpers ──────────────────────────────────────────────────
 
@@ -188,14 +179,14 @@ export default function TopicDetailPage({
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  async function startQuest() {
+  async function startLesson() {
     setPhase('starting')
     setError('')
     try {
       const res = await fetch('/api/lessons/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quest_id, source: 'direct' }),
+        body: JSON.stringify({ quest_id: lesson_id, source: 'direct' }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message ?? 'Failed to start lesson')
@@ -211,7 +202,7 @@ export default function TopicDetailPage({
       setCombo(0)
       setPhase('lesson')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start quest')
+      setError(e instanceof Error ? e.message : 'Failed to start lesson')
       setPhase('confirm')
     }
   }
@@ -234,7 +225,7 @@ export default function TopicDetailPage({
         setCheckIdx(0)
         setPhase('lesson')
       } else {
-        wrongPool.length > 0 ? setPhase('review') : completeQuest()
+        wrongPool.length > 0 ? setPhase('review') : completeLesson()
       }
     }
   }
@@ -282,7 +273,7 @@ export default function TopicDetailPage({
           setReviewCorrect(null)
           setPhase('review')
         } else {
-          completeQuest()
+          completeLesson()
         }
       }
     }
@@ -309,7 +300,7 @@ export default function TopicDetailPage({
     setWrongPool(newPool)
 
     if (newPool.length === 0) {
-      completeQuest()
+      completeLesson()
     } else {
       setReviewIdx(0)
       setReviewSelected(null)
@@ -319,7 +310,7 @@ export default function TopicDetailPage({
     }
   }
 
-  async function completeQuest() {
+  async function completeLesson() {
     setPhase('completing')
     soundComplete()
     haptic(HAPTIC_COMPLETE)
@@ -332,33 +323,29 @@ export default function TopicDetailPage({
       })
       const data = await res.json()
       sessionStorage.setItem(
-        `quest_result_${quest_id}`,
+        `quest_result_${lesson_id}`,
         JSON.stringify({
-          quest_id,
-          title: quest?.module_title ?? quest?.title ?? quest_id,
-          subject,
-          topic,
+          quest_id: lesson_id,
+          title: lesson?.module_title ?? lesson?.title ?? lesson_id,
+          subject: lesson?.subject ?? '',
+          topic: topicParam || lesson?.topic || '',
           sections_total: sections.length,
           sections_completed: sections.length,
           badge_name: null,
           badge_earned: false,
-          gems_awarded: 0,
+          gems_awarded: data.gems_awarded ?? 0,
           score: 100,
           is_first_completion: data.is_first_completion ?? false,
         })
       )
-      router.push(`/child/lessons/${encodedSubject}/${encodedTopic}/${quest_id}/results`)
+      router.push(`/child/lessons/${lesson_id}/results`)
     } catch {
       setError('Could not save progress. Please try again.')
       setPhase('quiz')
     }
   }
 
-  // ── Progress ──────────────────────────────────────────────────────────────
-  const progressPct = totalSections === 0 ? 0 :
-    Math.round((completedSections / totalSections) * 100)
-
-  // ── Combo toast container (always rendered) ───────────────────────────────
+  // ── Combo toast ───────────────────────────────────────────────────────────
   const ComboToast = comboToast ? (
     <div className="fixed top-20 left-0 right-0 z-50 flex justify-center pointer-events-none">
       <div key={comboToast} className="animate-pop-in bg-base-100 border border-base-300 shadow-xl rounded-2xl px-5 py-3 font-bold text-base">
@@ -374,9 +361,9 @@ export default function TopicDetailPage({
   if (phase === 'loading' || phase === 'starting' || phase === 'completing') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <span className="loading loading-ring loading-lg text-primary" />
+        <span className="loading loading-ring loading-lg text-info" />
         <p className="text-base-content/60 text-sm animate-pulse">
-          {phase === 'completing' ? 'Saving your progress…' : 'Loading…'}
+          {phase === 'completing' ? 'Saving your progress…' : 'Loading lesson…'}
         </p>
       </div>
     )
@@ -387,75 +374,64 @@ export default function TopicDetailPage({
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
         <div className="text-5xl">😕</div>
         <p className="text-base-content/60">{error || 'Something went wrong.'}</p>
-        <Link href={`/child/lessons/${encodedSubject}/${encodedTopic}`} className="btn btn-primary btn-sm">
-          Go back
-        </Link>
+        <Link href="/child/lessons" className="btn btn-info btn-sm">Back to Lessons</Link>
       </div>
     )
   }
 
-  // ── Confirm ───────────────────────────────────────────────────────────────
+  // ── Confirm (pre-start) ───────────────────────────────────────────────────
   if (phase === 'confirm') {
+    const moduleTitle = lesson?.module_title ?? lesson?.title ?? lesson_id
+    const topicTitle = topicParam || lesson?.topic || moduleTitle
+
     return (
       <div className="flex flex-col gap-5 animate-fade-in-up">
-        <div className="flex items-center gap-3">
-          <Link href={`/child/lessons/${encodedSubject}/${encodedTopic}`} className="btn btn-circle btn-sm btn-ghost border border-base-300">‹</Link>
-          <Breadcrumb crumbs={[
-            { label: 'Home', href: '/child/home' },
-            { label: 'Lessons', href: `/child/lessons?subject=${subjectSlug}` },
-            { label: subject, href: `/child/lessons?subject=${subjectSlug}` },
-            { label: topic, href: `/child/lessons/${encodedSubject}/${encodedTopic}` },
-            { label: quest?.module_title ?? quest_id },
-          ]} />
-        </div>
+        <Link href="/child/lessons" className="btn btn-ghost btn-sm w-fit gap-1 -ml-2">
+          ← Lessons
+        </Link>
 
         <div>
-          <div className="flex gap-2 mb-2">
-            <span className="badge badge-ghost badge-sm">{subject}</span>
-            <span className="badge badge-ghost badge-sm">{topic}</span>
-          </div>
-          <h1 className="text-2xl font-bold">{quest?.module_title ?? quest?.title ?? quest_id}</h1>
-          <p className="text-base-content/60 text-sm mt-1">
-            {sections.length} section{sections.length !== 1 ? 's' : ''}
-          </p>
+          {lesson?.subject && (
+            <span className="badge badge-ghost badge-sm mb-2">{lesson.subject}</span>
+          )}
+          <p className="text-sm text-base-content/40 font-medium mb-0.5">{moduleTitle}</p>
+          <h1 className="text-2xl font-bold">{topicTitle}</h1>
+          {sections.length > 0 && (
+            <p className="text-xs text-base-content/40 mt-1">
+              {sections.length} section{sections.length !== 1 ? 's' : ''}
+            </p>
+          )}
         </div>
 
         {sections.length > 1 && (
-          <div className="overflow-x-auto pb-1">
-            <ul className="steps steps-horizontal w-full text-[10px]">
-              {sections.map((s, i) => (
-                <li key={s.section_id ?? i} className="step step-primary">
-                  {i + 1}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {sections.length > 0 && (
-          <div className="flex flex-col gap-2">
+          <div className="flex gap-2 flex-wrap">
             {sections.map((s, i) => (
-              <div key={s.section_id ?? i} className="flex items-center gap-3 p-3 rounded-xl bg-base-200">
-                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                  {s.section_number ?? i + 1}
-                </div>
-                <p className="text-sm font-medium">{s.title}</p>
+              <div
+                key={s.section_id ?? i}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-base-200 text-xs font-medium"
+              >
+                <span className="w-4 h-4 rounded-full bg-base-300 flex items-center justify-center text-[10px] font-bold">
+                  {i + 1}
+                </span>
+                {s.title}
               </div>
             ))}
           </div>
         )}
 
+        <div className="flex items-center gap-3 p-4 rounded-2xl bg-base-200">
+          <span className="text-2xl">💎</span>
+          <div>
+            <p className="font-semibold text-sm">{lesson?.gem_cost ?? '…'} Blue Gem{lesson?.gem_cost !== 1 ? 's' : ''} to start</p>
+            <p className="text-xs text-base-content/50">Deducted when you begin</p>
+          </div>
+        </div>
+
         {error && <div className="alert alert-error text-sm py-2">{error}</div>}
 
-        <div className="sticky bottom-0 bg-base-100 pt-3 pb-2 -mx-4 px-4 border-t border-base-200">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xl">💎</span>
-            <p className="text-sm font-semibold">{quest?.gem_cost ?? '…'} Blue Gem{quest?.gem_cost !== 1 ? 's' : ''} to start</p>
-          </div>
-          <button className="btn btn-primary w-full" onClick={startQuest}>
-            ▶ Start
-          </button>
-        </div>
+        <button className="btn btn-info w-full text-info-content" onClick={startLesson}>
+          ▶ Start Lesson
+        </button>
       </div>
     )
   }
@@ -468,20 +444,21 @@ export default function TopicDetailPage({
         {ComboToast}
 
         {totalSections > 1 && (
-          <div className="overflow-x-auto">
-            <ul className="steps steps-horizontal w-full text-[10px]">
-              {sections.map((_, i) => (
-                <li key={i} className={`step ${i <= sectionIdx ? 'step-primary' : ''}`}>
-                  {i + 1}
-                </li>
-              ))}
-            </ul>
+          <div className="flex gap-1.5 justify-center">
+            {sections.map((_, i) => (
+              <div
+                key={i}
+                className={`h-1.5 rounded-full transition-all ${
+                  i < sectionIdx ? 'w-4 bg-success' : i === sectionIdx ? 'w-6 bg-info' : 'w-4 bg-base-300'
+                }`}
+              />
+            ))}
           </div>
         )}
 
         <div>
           <p className="text-xs text-base-content/40 uppercase tracking-wide font-medium">
-            {totalSections > 1 ? `Section ${currentSection?.section_number ?? (sectionIdx + 1)} of ${totalSections}` : 'Lesson'}
+            {totalSections > 1 ? `Section ${sectionIdx + 1} of ${totalSections}` : 'Lesson'}
           </p>
           <h2 className="text-xl font-bold mt-0.5">{currentSection?.title}</h2>
         </div>
@@ -506,15 +483,13 @@ export default function TopicDetailPage({
             <div className="collapse-content flex flex-col gap-5 pt-1">
               {examples.map((ex, exIdx) => (
                 <div key={exIdx} className="flex flex-col gap-2">
-                  <p className="text-xs font-bold text-primary uppercase tracking-wide">
-                    Example {ex.example_number}
-                  </p>
+                  <p className="text-xs font-bold text-info uppercase tracking-wide">Example {ex.example_number}</p>
                   <p className="text-xs italic text-base-content/60 leading-relaxed">{ex.context}</p>
                   <p className="text-sm font-semibold">{ex.problem}</p>
-                  <div className="flex flex-col gap-1 pl-3 border-l-2 border-primary/30">
+                  <div className="flex flex-col gap-1 pl-3 border-l-2 border-info/30">
                     {ex.solution.map((step, i) => (
                       <p key={i} className="text-xs text-base-content/80 leading-relaxed">
-                        {typeof step === 'string' ? step : (step as Record<string, string>).step ?? (step as Record<string, string>).detail ?? (step as Record<string, string>).description ?? JSON.stringify(step)}
+                        {typeof step === 'string' ? step : (step as Record<string, string>).step ?? JSON.stringify(step)}
                       </p>
                     ))}
                   </div>
@@ -524,7 +499,7 @@ export default function TopicDetailPage({
           </div>
         )}
 
-        <button className="btn btn-primary w-full" onClick={advanceLesson}>
+        <button className="btn btn-info w-full text-info-content" onClick={advanceLesson}>
           {isLastPara ? 'Check Your Understanding →' : 'Next →'}
         </button>
       </div>
@@ -539,19 +514,17 @@ export default function TopicDetailPage({
         {ComboToast}
 
         {totalSections > 1 && (
-          <div className="overflow-x-auto">
-            <ul className="steps steps-horizontal w-full text-[10px]">
-              {sections.map((_, i) => (
-                <li key={i} className={`step ${i <= sectionIdx ? 'step-primary' : ''}`}>{i + 1}</li>
-              ))}
-            </ul>
+          <div className="flex gap-1.5 justify-center">
+            {sections.map((_, i) => (
+              <div key={i} className={`h-1.5 rounded-full transition-all ${
+                i < sectionIdx ? 'w-4 bg-success' : i === sectionIdx ? 'w-6 bg-info' : 'w-4 bg-base-300'
+              }`} />
+            ))}
           </div>
         )}
 
         <div>
-          <p className="text-xs text-primary uppercase tracking-wide font-semibold">
-            ✏️ Check Your Understanding
-          </p>
+          <p className="text-xs text-info uppercase tracking-wide font-semibold">✏️ Check Your Understanding</p>
           <p className="text-xs text-base-content/40 mt-0.5">
             {currentSection?.title} · Q{checkIdx + 1} of {checks.length}
           </p>
@@ -578,17 +551,16 @@ export default function TopicDetailPage({
                   setSelected(key)
                   setTimeout(() => submitAnswer(key), 400)
                 }}
-                className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left
-                  transition-all duration-150 active:scale-95
-                  ${isFlashed
-                    ? 'border-primary bg-primary text-primary-content font-semibold scale-[1.01]'
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-150 active:scale-95 ${
+                  isFlashed
+                    ? 'border-info bg-info text-info-content font-semibold scale-[1.01]'
                     : isOther
                     ? 'border-base-300 bg-base-100 opacity-40'
                     : 'border-base-300 bg-base-100 hover:bg-base-200'
-                  }`}
+                }`}
               >
                 <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-colors ${
-                  isFlashed ? 'bg-primary-content/20 text-primary-content' : 'bg-base-300'
+                  isFlashed ? 'bg-info-content/20 text-info-content' : 'bg-base-300'
                 }`}>{key}</span>
                 <span><QuestionRenderer text={value} /></span>
               </button>
@@ -600,9 +572,7 @@ export default function TopicDetailPage({
           <div className="collapse collapse-arrow bg-base-200 rounded-xl">
             <input type="checkbox" />
             <div className="collapse-title text-sm py-2 min-h-0 font-medium">💡 Need a hint?</div>
-            <div className="collapse-content text-sm text-base-content/70 leading-relaxed">
-              {currentCheck.tip}
-            </div>
+            <div className="collapse-content text-sm text-base-content/70 leading-relaxed">{currentCheck.tip}</div>
           </div>
         )}
       </div>
@@ -614,11 +584,9 @@ export default function TopicDetailPage({
     return (
       <div className="flex flex-col gap-4 min-h-[calc(100vh-8rem)]">
         {ComboToast}
-        <div
-          className={`rounded-2xl p-5 shadow-sm animate-fade-in-up ${
-            isCorrect ? 'bg-success/10 border border-success/20' : `bg-error/10 border border-error/20 ${shaking ? 'animate-shake' : ''}`
-          }`}
-        >
+        <div className={`rounded-2xl p-5 shadow-sm animate-fade-in-up ${
+          isCorrect ? 'bg-success/10 border border-success/20' : `bg-error/10 border border-error/20 ${shaking ? 'animate-shake' : ''}`
+        }`}>
           <p className={`text-2xl font-bold ${isCorrect ? 'text-success' : 'text-error'}`}>
             {isCorrect ? '✓ Correct!' : '✗ Not quite'}
           </p>
@@ -634,28 +602,19 @@ export default function TopicDetailPage({
             <div className="collapse collapse-arrow bg-base-100/40 rounded-xl mt-3">
               <input type="checkbox" />
               <div className="collapse-title text-sm py-2 min-h-0 font-medium">📝 Explanation</div>
-              <div className="collapse-content text-sm text-base-content/70 leading-relaxed">
-                {currentCheck.explanation}
-              </div>
+              <div className="collapse-content text-sm text-base-content/70 leading-relaxed">{currentCheck.explanation}</div>
             </div>
           )}
         </div>
 
         {!isCorrect && (
-          <p className="text-xs text-base-content/40 text-center">
-            📌 This question will be reviewed again at the end
-          </p>
+          <p className="text-xs text-base-content/40 text-center">📌 This question will be reviewed again at the end</p>
         )}
-
         {combo >= 3 && isCorrect && (
-          <div className="text-center text-sm font-semibold text-warning">
-            🔥 {combo} in a row!
-          </div>
+          <div className="text-center text-sm font-semibold text-warning">🔥 {combo} in a row!</div>
         )}
 
-        <button className="btn btn-primary w-full mt-auto" onClick={advanceQuiz}>
-          Continue →
-        </button>
+        <button className="btn btn-info w-full text-info-content mt-auto" onClick={advanceQuiz}>Continue →</button>
       </div>
     )
   }
@@ -666,7 +625,6 @@ export default function TopicDetailPage({
     return (
       <div key={`review-${reviewIdx}`} className="flex flex-col gap-4 min-h-[calc(100vh-8rem)] animate-fade-in-up">
         {ComboToast}
-
         <div className="rounded-2xl bg-warning/10 border border-warning/20 p-4 flex items-center gap-3">
           <span className="text-2xl">🔁</span>
           <div>
@@ -675,19 +633,14 @@ export default function TopicDetailPage({
               <span className="countdown font-mono text-lg font-bold text-warning">
                 <span style={{ '--value': wrongPool.length } as React.CSSProperties} />
               </span>
-              <span className="text-xs text-base-content/60">
-                question{wrongPool.length !== 1 ? 's' : ''} left to master
-              </span>
+              <span className="text-xs text-base-content/60">question{wrongPool.length !== 1 ? 's' : ''} left to master</span>
             </div>
           </div>
         </div>
 
         <p className="text-xs text-base-content/40">{item.sectionTitle}</p>
-
         <div className="rounded-2xl bg-base-200 p-5 shadow-sm">
-          <p className="text-base font-medium leading-relaxed">
-            <QuestionRenderer text={item.check.question} />
-          </p>
+          <p className="text-base font-medium leading-relaxed"><QuestionRenderer text={item.check.question} /></p>
         </div>
 
         <div className="flex flex-col gap-3">
@@ -705,17 +658,14 @@ export default function TopicDetailPage({
                   setReviewSelected(key)
                   setTimeout(() => submitReview(key), 400)
                 }}
-                className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left
-                  transition-all duration-150 active:scale-95
-                  ${isFlashed
-                    ? 'border-primary bg-primary text-primary-content font-semibold scale-[1.01]'
-                    : isOther
-                    ? 'border-base-300 bg-base-100 opacity-40'
-                    : 'border-base-300 bg-base-100 hover:bg-base-200'
-                  }`}
+                className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-150 active:scale-95 ${
+                  isFlashed ? 'border-info bg-info text-info-content font-semibold scale-[1.01]'
+                  : isOther ? 'border-base-300 bg-base-100 opacity-40'
+                  : 'border-base-300 bg-base-100 hover:bg-base-200'
+                }`}
               >
                 <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                  isFlashed ? 'bg-primary-content/20 text-primary-content' : 'bg-base-300'
+                  isFlashed ? 'bg-info-content/20 text-info-content' : 'bg-base-300'
                 }`}>{key}</span>
                 <span><QuestionRenderer text={value} /></span>
               </button>
@@ -732,43 +682,32 @@ export default function TopicDetailPage({
     return (
       <div className="flex flex-col gap-4 min-h-[calc(100vh-8rem)]">
         {ComboToast}
-        <div
-          className={`rounded-2xl p-5 shadow-sm animate-fade-in-up ${
-            reviewCorrect
-              ? 'bg-success/10 border border-success/20'
-              : `bg-error/10 border border-error/20 ${shaking ? 'animate-shake' : ''}`
-          }`}
-        >
+        <div className={`rounded-2xl p-5 shadow-sm animate-fade-in-up ${
+          reviewCorrect ? 'bg-success/10 border border-success/20'
+          : `bg-error/10 border border-error/20 ${shaking ? 'animate-shake' : ''}`
+        }`}>
           <p className={`text-2xl font-bold ${reviewCorrect ? 'text-success' : 'text-error'}`}>
             {reviewCorrect ? '✓ Got it!' : '✗ Keep trying'}
           </p>
           {!reviewCorrect && (
             <p className="text-sm font-semibold mt-3">
               Correct answer:{' '}
-              <span className="text-success">
-                {item.check.correct_answer} — {item.check.options[item.check.correct_answer]}
-              </span>
+              <span className="text-success">{item.check.correct_answer} — {item.check.options[item.check.correct_answer]}</span>
             </p>
           )}
           {item.check.explanation && (
             <div className="collapse collapse-arrow bg-base-100/40 rounded-xl mt-3">
               <input type="checkbox" />
               <div className="collapse-title text-sm py-2 min-h-0 font-medium">📝 Explanation</div>
-              <div className="collapse-content text-sm text-base-content/70 leading-relaxed">
-                {item.check.explanation}
-              </div>
+              <div className="collapse-content text-sm text-base-content/70 leading-relaxed">{item.check.explanation}</div>
             </div>
           )}
         </div>
-
         {!reviewCorrect && (
-          <p className="text-xs text-base-content/40 text-center">
-            This question will come back around again
-          </p>
+          <p className="text-xs text-base-content/40 text-center">This question will come back around again</p>
         )}
-
-        <button className="btn btn-primary w-full mt-auto" onClick={advanceReview}>
-          {wrongPool.length <= 1 && reviewCorrect ? '🎉 Complete' : 'Continue →'}
+        <button className="btn btn-info w-full text-info-content mt-auto" onClick={advanceReview}>
+          {wrongPool.length <= 1 && reviewCorrect ? '🎉 Complete Lesson' : 'Continue →'}
         </button>
       </div>
     )

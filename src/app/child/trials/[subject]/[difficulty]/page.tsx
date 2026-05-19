@@ -482,13 +482,16 @@ export default function TrialPage({
         ))}
       </div>
 
-      {/* Question card */}
+      {/* Question card — split-text entrance replaces the old fade-in-right slide */}
       <div
         key={`q-${currentIdx}`}
-        className="card bg-base-200 rounded-2xl p-5 shadow-sm animate-fade-in-right"
+        className="card bg-base-200 rounded-2xl p-8 shadow-sm min-h-[32vh] flex items-center justify-center"
       >
-        <p className="text-base leading-relaxed font-medium">
-          <QuestionRenderer text={currentQ.question ?? currentQ.question_text ?? ''} />
+        <p className="text-base leading-relaxed font-medium text-center max-w-xl">
+          <QuestionRenderer
+            text={currentQ.question ?? currentQ.question_text ?? ''}
+            splitAnimate
+          />
         </p>
       </div>
 

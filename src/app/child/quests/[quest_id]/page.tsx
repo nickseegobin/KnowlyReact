@@ -573,12 +573,12 @@ export default function QuestDetailPage({
           <h2 className="text-xl font-bold mt-0.5">{currentSection?.title}</h2>
         </div>
 
-        <div className="flex-1 rounded-2xl bg-base-200 p-5 shadow-sm">
-          <p key={`para-${paraIdx}`} className="text-base leading-relaxed text-base-content animate-fade-in">
-            <QuestionRenderer text={currentPara} />
+        <div className="rounded-2xl bg-base-200 p-8 shadow-sm min-h-[32vh] flex flex-col items-center justify-center gap-3">
+          <p key={`para-${paraIdx}`} className="text-base leading-relaxed text-base-content max-w-xl w-full">
+            <QuestionRenderer text={currentPara} splitAnimate />
           </p>
           {(currentSection?.explanation?.length ?? 0) > 1 && (
-            <p className="text-xs text-base-content/40 mt-4 text-right">
+            <p className="text-xs text-base-content/40 self-end">
               {paraIdx + 1} / {currentSection?.explanation?.length}
             </p>
           )}
@@ -640,9 +640,9 @@ export default function QuestDetailPage({
           </p>
         </div>
 
-        <div className="rounded-2xl bg-base-200 p-5 shadow-sm">
-          <p className="text-base font-medium leading-relaxed">
-            <QuestionRenderer text={currentCheck?.question ?? ''} />
+        <div className="rounded-2xl bg-base-200 p-8 shadow-sm min-h-[32vh] flex items-center justify-center">
+          <p className="text-base font-medium leading-relaxed text-center max-w-xl">
+            <QuestionRenderer text={currentCheck?.question ?? ''} splitAnimate />
           </p>
         </div>
 
@@ -749,8 +749,10 @@ export default function QuestDetailPage({
         </div>
 
         <p className="text-xs text-base-content/40">{item.sectionTitle}</p>
-        <div className="rounded-2xl bg-base-200 p-5 shadow-sm">
-          <p className="text-base font-medium leading-relaxed"><QuestionRenderer text={item.check.question} /></p>
+        <div className="rounded-2xl bg-base-200 p-8 shadow-sm min-h-[32vh] flex items-center justify-center">
+          <p className="text-base font-medium leading-relaxed text-center max-w-xl">
+            <QuestionRenderer text={item.check.question} splitAnimate />
+          </p>
         </div>
 
         <div className="flex flex-col gap-3">

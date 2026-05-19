@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { BarChart2, ChevronRight, Users } from 'lucide-react'
+import { BarChart2, ChevronRight, Users, BookOpen, ClipboardCheck, Compass } from 'lucide-react'
 import { LEVELS } from '@/types/knowly'
 
 interface ClassMember {
@@ -17,7 +17,7 @@ interface ClassMember {
 interface ClassTask {
   id: number
   title: string
-  type: 'quest' | 'trial'
+  type: 'quest' | 'trial' | 'lesson'
   subject: string | null
   difficulty: string | null
   due_date: string | null
@@ -25,6 +25,12 @@ interface ClassTask {
   red_gem_cost: number
   status: string
   created_at: string
+}
+
+const TASK_TYPE_CONFIG = {
+  lesson: { label: 'Lesson', Icon: BookOpen,       badge: 'badge-primary'  },
+  trial:  { label: 'Trial',  Icon: ClipboardCheck, badge: 'badge-warning'  },
+  quest:  { label: 'Quest',  Icon: Compass,        badge: 'badge-success'  },
 }
 
 interface ClassDetail {
@@ -53,8 +59,7 @@ export default function ClassDetailPage() {
   const [cls, setCls] = useState<ClassDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [removing,       setRemoving]       = useState<number | null>(null)
-  const [removingTask,   setRemovingTask]   = useState<number | null>(null)
+  const [removing, setRemoving] = useState<number | null>(null)
 
   const fetchClass = useCallback(async () => {
     setLoading(true)
@@ -75,17 +80,6 @@ export default function ClassDetailPage() {
   }, [classId])
 
   useEffect(() => { fetchClass() }, [fetchClass])
-
-  async function deleteTask(taskId: number) {
-    setRemovingTask(taskId)
-    try {
-      const res = await fetch(`/api/classes/${classId}/tasks/${taskId}`, { method: 'DELETE' })
-      if (res.ok) {
-        setCls((prev) => prev ? { ...prev, tasks: prev.tasks.filter((t) => t.id !== taskId) } : prev)
-      }
-    } catch { /* ignore */ }
-    finally { setRemovingTask(null) }
-  }
 
   async function removeMember(childId: number) {
     setRemoving(childId)
@@ -217,34 +211,32 @@ export default function ClassDetailPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {cls.tasks.map((task) => (
-              <div key={task.id} className="bg-base-200 rounded-2xl px-4 py-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-sm">{task.title}</p>
-                      <span className={`badge badge-sm shrink-0 ${task.type === 'quest' ? 'badge-primary' : 'badge-secondary'}`}>
-                        {task.type}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                      {task.subject && <span className="text-xs text-base-content/50">{subjectLabel(task.subject)}</span>}
-                      {task.difficulty && <span className="text-xs text-base-content/50 capitalize">{task.difficulty}</span>}
-                      {task.due_date && (
-                        <span className="text-xs text-base-content/50">Due {task.due_date}</span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => deleteTask(task.id)}
-                    disabled={removingTask === task.id}
-                    className="text-xs text-error hover:opacity-70 disabled:opacity-40 shrink-0"
+            {cls.tasks.map((task) => {
+              const conf = TASK_TYPE_CONFIG[task.type] ?? TASK_TYPE_CONFIG.trial
+              const TaskIcon = conf.Icon
+              return (
+                <div key={task.id} className="bg-base-200 rounded-2xl overflow-hidden">
+                  <Link
+                    href={`/teacher/classes/${classId}/tasks/${task.id}`}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-base-300 transition-colors group"
                   >
-                    {removingTask === task.id ? <span className="loading loading-spinner loading-xs" /> : 'Remove'}
-                  </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <TaskIcon size={14} className="text-base-content/40 shrink-0" />
+                        <p className="font-semibold text-sm">{task.title}</p>
+                        <span className={`badge badge-sm shrink-0 ${conf.badge}`}>{conf.label}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                        {task.subject && <span className="text-xs text-base-content/50">{subjectLabel(task.subject)}</span>}
+                        {task.difficulty && <span className="text-xs text-base-content/50 capitalize">{task.difficulty}</span>}
+                        {task.due_date && <span className="text-xs text-base-content/50">Due {task.due_date}</span>}
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-base-content/30 group-hover:text-base-content/60 transition-colors shrink-0" />
+                  </Link>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  Gem, Users, BarChart2, Bell, ChevronRight, Plus,
+  Gem, Users, BarChart2, Bell, ChevronRight, AlertTriangle,
 } from 'lucide-react'
 import type { TeacherProfile, ClassEntry } from '@/types/knowly'
 
@@ -103,7 +103,7 @@ export default function TeacherHomePage() {
         </Link>
 
         <Link
-          href="/teacher/classes"
+          href="/teacher/analytics"
           className="flex flex-col gap-3 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors"
         >
           <div className="w-11 h-11 rounded-xl bg-info/10 text-info flex items-center justify-center">
@@ -129,15 +129,15 @@ export default function TeacherHomePage() {
         </Link>
 
         <Link
-          href="/teacher/classes"
-          className="flex flex-col gap-3 p-4 rounded-2xl bg-primary text-primary-content hover:opacity-90 transition-opacity"
+          href="/teacher/at-risk"
+          className="flex flex-col gap-3 p-4 rounded-2xl bg-base-200 hover:bg-base-300 transition-colors"
         >
-          <div className="w-11 h-11 rounded-xl bg-primary-content/10 flex items-center justify-center">
-            <Plus size={22} />
+          <div className="w-11 h-11 rounded-xl bg-error/10 text-error flex items-center justify-center">
+            <AlertTriangle size={22} />
           </div>
           <div>
-            <p className="font-semibold text-sm">New Class</p>
-            <p className="text-xs text-primary-content/70 mt-0.5">Create a new class</p>
+            <p className="font-semibold text-sm">At-Risk</p>
+            <p className="text-xs text-base-content/50 mt-0.5">Students needing attention</p>
           </div>
         </Link>
       </div>

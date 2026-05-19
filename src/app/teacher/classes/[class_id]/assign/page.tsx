@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { BookOpen, ClipboardCheck, ChevronDown, ChevronRight, Check } from 'lucide-react'
+import { BookOpen, ClipboardCheck, Check } from 'lucide-react'
 import { LEVELS, PERIODS } from '@/types/knowly'
 
-type TaskType  = 'lesson' | 'trial'
-type TrialScope = 'general' | 'single' | 'multi'
+type TaskType = 'lesson' | 'trial'
 
 const SUBJECTS = [
   { value: 'math',           label: 'Mathematics' },
@@ -16,10 +15,17 @@ const SUBJECTS = [
 ]
 
 const DIFFICULTIES = [
-  { value: 'easy',   label: 'Easy' },
+  { value: 'easy',   label: 'Easy'   },
   { value: 'medium', label: 'Medium' },
-  { value: 'hard',   label: 'Hard' },
+  { value: 'hard',   label: 'Hard'   },
 ]
+
+const PERIOD_LABEL: Record<string, string> = Object.fromEntries(
+  PERIODS.map((p) => [p.value, p.label])
+)
+const SUBJECT_LABEL: Record<string, string> = Object.fromEntries(
+  SUBJECTS.map((s) => [s.value, s.label])
+)
 
 interface LessonEntry {
   quest_id:      string
@@ -27,6 +33,7 @@ interface LessonEntry {
   module_title:  string
   topic:         string
   subject:       string
+  period:        string
   objectives:    string[]
 }
 
@@ -34,6 +41,9 @@ interface Module {
   module_number: number
   module_title:  string
 }
+
+// null = "All sections"; number[] = specific section indices selected
+type SectionSel = null | number[]
 
 export default function AssignActivityPage() {
   const router  = useRouter()
@@ -43,23 +53,21 @@ export default function AssignActivityPage() {
   const [taskType, setTaskType] = useState<TaskType>('lesson')
 
   // ── Lesson catalogue ──────────────────────────────────────────────────────
-  const [level,   setLevel]   = useState('std_4')
-  const [period,  setPeriod]  = useState('')
-  const [subject, setSubject] = useState('')
-  const [lessons, setLessons] = useState<LessonEntry[]>([])
-  const [lessonsLoading, setLessonsLoading] = useState(false)
-  const [selectedLessons, setSelectedLessons] = useState<LessonEntry[]>([])
-  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
-  const [sectionSelections, setSectionSelections] = useState<Record<string, number | null>>({})
+  const [level,             setLevel]             = useState('std_4')
+  const [filterPeriod,      setFilterPeriod]      = useState('')
+  const [lessons,           setLessons]           = useState<LessonEntry[]>([])
+  const [lessonsLoading,    setLessonsLoading]    = useState(false)
+  const [selectedLessons,   setSelectedLessons]   = useState<LessonEntry[]>([])
+  const [sectionSelections, setSectionSelections] = useState<Record<string, SectionSel>>({})
 
   // ── Trial fields ──────────────────────────────────────────────────────────
-  const [trialSubject,  setTrialSubject]  = useState('')
-  const [trialLevel,    setTrialLevel]    = useState('std_4')
-  const [trialPeriod,   setTrialPeriod]   = useState('')
-  const [trialScope,    setTrialScope]    = useState<TrialScope>('general')
-  const [modules,       setModules]       = useState<Module[]>([])
-  const [modulesLoading, setModulesLoading] = useState(false)
+  const [trialSubject,    setTrialSubject]    = useState('')
+  const [trialLevel,      setTrialLevel]      = useState('std_4')
+  const [trialPeriod,     setTrialPeriod]     = useState('')
+  const [modules,         setModules]         = useState<Module[]>([])
+  const [modulesLoading,  setModulesLoading]  = useState(false)
   const [selectedModules, setSelectedModules] = useState<number[]>([])
+  // empty selectedModules = "All Topics" (general trial)
 
   // ── Shared fields ─────────────────────────────────────────────────────────
   const [title,      setTitle]      = useState('')
@@ -78,22 +86,19 @@ export default function AssignActivityPage() {
     setSectionSelections({})
     try {
       const qs = new URLSearchParams({ level })
-      if (period)  qs.set('period', period)
-      if (subject) qs.set('subject', subject)
+      if (filterPeriod) qs.set('period', filterPeriod)
       const res = await fetch(`/api/lessons/teacher/catalogue?${qs}`)
       if (res.ok) {
         const data = await res.json()
-        const fetched: LessonEntry[] = data.lessons ?? []
-        setLessons(fetched)
-        setExpandedModules(new Set(fetched.map(l => l.module_title)))
+        setLessons(data.lessons ?? [])
       }
     } catch {}
     finally { setLessonsLoading(false) }
-  }, [taskType, level, period, subject])
+  }, [taskType, level, filterPeriod])
 
   useEffect(() => { fetchCatalogue() }, [fetchCatalogue])
 
-  // ── Module list fetch (trial) ─────────────────────────────────────────────
+  // ── Trial module fetch ────────────────────────────────────────────────────
   useEffect(() => {
     if (taskType !== 'trial' || !trialSubject) return
     setModulesLoading(true)
@@ -108,75 +113,52 @@ export default function AssignActivityPage() {
       .finally(() => setModulesLoading(false))
   }, [taskType, trialSubject, trialLevel, trialPeriod])
 
-  // ── Auto-generate title (trial) ───────────────────────────────────────────
+  // ── Auto-generate trial title ─────────────────────────────────────────────
   useEffect(() => {
-    if (taskType !== 'trial') return
-    const subLabel = SUBJECTS.find(s => s.value === trialSubject)?.label ?? trialSubject
-    if (trialScope === 'general') {
+    if (taskType !== 'trial' || !trialSubject) return
+    const subLabel = SUBJECTS.find(s => s.value === trialSubject)?.label ?? ''
+    if (selectedModules.length === 0) {
       setTitle(subLabel ? `${subLabel} Trial` : '')
-    } else if (trialScope === 'single' && selectedModules.length === 1) {
+    } else if (selectedModules.length === 1) {
       const m = modules.find(m => m.module_number === selectedModules[0])
-      setTitle(m ? `${m.module_title} Trial` : '')
-    } else if (trialScope === 'multi' && selectedModules.length > 1) {
+      setTitle(m ? `${m.module_title} Trial` : `${subLabel} Trial`)
+    } else {
       setTitle(`${subLabel} — ${selectedModules.length} Topics`)
     }
-  }, [taskType, trialScope, selectedModules, trialSubject, modules])
+  }, [taskType, trialSubject, trialLevel, selectedModules, modules])
 
-  // ── Lesson selection helpers ──────────────────────────────────────────────
+  // ── Lesson helpers ────────────────────────────────────────────────────────
   function toggleLesson(lesson: LessonEntry) {
-    setSelectedLessons(prev => {
-      const exists = prev.some(l => l.quest_id === lesson.quest_id)
-      if (exists) {
-        setSectionSelections(s => { const n = { ...s }; delete n[lesson.quest_id]; return n })
-        return prev.filter(l => l.quest_id !== lesson.quest_id)
-      }
-      return [...prev, lesson]
-    })
-  }
-
-  function toggleModuleGroup(groupLessons: LessonEntry[]) {
-    const allSelected = groupLessons.every(l => selectedLessons.some(s => s.quest_id === l.quest_id))
-    if (allSelected) {
-      setSectionSelections(s => {
-        const n = { ...s }
-        groupLessons.forEach(l => delete n[l.quest_id])
-        return n
-      })
-      setSelectedLessons(prev => prev.filter(l => !groupLessons.some(g => g.quest_id === l.quest_id)))
+    const isSelected = selectedLessons.some(l => l.quest_id === lesson.quest_id)
+    if (isSelected) {
+      setSectionSelections(s => { const n = { ...s }; delete n[lesson.quest_id]; return n })
+      setSelectedLessons(prev => prev.filter(l => l.quest_id !== lesson.quest_id))
     } else {
-      setSelectedLessons(prev => {
-        const toAdd = groupLessons.filter(l => !prev.some(s => s.quest_id === l.quest_id))
-        return [...prev, ...toAdd]
-      })
+      setSectionSelections(s => ({ ...s, [lesson.quest_id]: null }))
+      setSelectedLessons(prev => [...prev, lesson])
     }
   }
 
-  function setSectionForLesson(questId: string, idx: number | null) {
-    setSectionSelections(prev => ({ ...prev, [questId]: idx }))
-  }
-
-  function toggleExpanded(moduleTitle: string) {
-    setExpandedModules(prev => {
-      const next = new Set(prev)
-      if (next.has(moduleTitle)) next.delete(moduleTitle)
-      else next.add(moduleTitle)
-      return next
+  function toggleSection(questId: string, idx: number) {
+    setSectionSelections(prev => {
+      const current = prev[questId]
+      if (current === null) return { ...prev, [questId]: [idx] }
+      const next = current.includes(idx)
+        ? current.filter(i => i !== idx)
+        : [...current, idx]
+      return { ...prev, [questId]: next.length === 0 ? null : next }
     })
   }
 
-  // ── Trial module toggle ───────────────────────────────────────────────────
+  function selectAllSections(questId: string) {
+    setSectionSelections(prev => ({ ...prev, [questId]: null }))
+  }
+
+  // ── Trial helpers ─────────────────────────────────────────────────────────
   function toggleModule(num: number) {
-    if (trialScope === 'single') {
-      setSelectedModules(prev => prev[0] === num ? [] : [num])
-    } else {
-      setSelectedModules(prev =>
-        prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]
-      )
-    }
-  }
-
-  function subjectLabel(s: string) {
-    return SUBJECTS.find((x) => x.value === s)?.label ?? s.replace(/_/g, ' ')
+    setSelectedModules(prev =>
+      prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num]
+    )
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -184,14 +166,10 @@ export default function AssignActivityPage() {
     setSubmitError('')
 
     if (taskType === 'lesson' && selectedLessons.length === 0) {
-      setSubmitError('Please select at least one lesson.')
-      return
+      setSubmitError('Please select at least one lesson.'); return
     }
     if (taskType === 'trial') {
       if (!trialSubject) { setSubmitError('Please select a subject.'); return }
-      if (trialScope !== 'general' && selectedModules.length === 0) {
-        setSubmitError('Please select at least one topic.'); return
-      }
       if (!title.trim()) { setSubmitError('Title is required.'); return }
     }
 
@@ -199,27 +177,31 @@ export default function AssignActivityPage() {
     try {
       if (taskType === 'lesson') {
         for (const lesson of selectedLessons) {
-          const sectionIdx = sectionSelections[lesson.quest_id] ?? null
-          const body: Record<string, unknown> = {
-            title:        lesson.topic || lesson.module_title,
-            type:         'lesson',
-            due_date:     dueDate || undefined,
-            reference_id: lesson.quest_id,
-            subject:      lesson.subject,
-          }
-          if (sectionIdx !== null) body.lesson_section_index = sectionIdx
-          const res = await fetch(`/api/classes/${classId}/tasks`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(body),
-          })
-          if (!res.ok) {
-            const data = await res.json()
-            setSubmitError(data.message ?? 'Failed to assign activity.')
-            return
+          const sel = sectionSelections[lesson.quest_id] ?? null
+          const indices: Array<number | null> = sel === null ? [null] : sel
+          for (const sectionIdx of indices) {
+            const body: Record<string, unknown> = {
+              title:        lesson.topic || lesson.module_title,
+              type:         'lesson',
+              due_date:     dueDate || undefined,
+              reference_id: lesson.quest_id,
+              subject:      lesson.subject,
+            }
+            if (sectionIdx !== null) body.lesson_section_index = sectionIdx
+            const res = await fetch(`/api/classes/${classId}/tasks`, {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify(body),
+            })
+            if (!res.ok) {
+              const data = await res.json()
+              setSubmitError(data.message ?? 'Failed to assign activity.')
+              return
+            }
           }
         }
       } else {
+        // selectedModules empty = general trial; non-empty = topic-scoped
         const res = await fetch(`/api/classes/${classId}/tasks`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -229,8 +211,8 @@ export default function AssignActivityPage() {
             due_date:       dueDate || undefined,
             difficulty:     difficulty || undefined,
             subject:        trialSubject,
-            scope:          trialScope === 'general' ? 'period' : 'general_topic',
-            module_numbers: trialScope === 'general' ? [] : selectedModules,
+            scope:          selectedModules.length === 0 ? 'period' : 'general_topic',
+            module_numbers: selectedModules,
           }),
         })
         if (!res.ok) {
@@ -239,7 +221,6 @@ export default function AssignActivityPage() {
           return
         }
       }
-
       router.push(`/teacher/classes/${classId}`)
     } catch {
       setSubmitError('Something went wrong.')
@@ -248,24 +229,75 @@ export default function AssignActivityPage() {
     }
   }
 
-  // ── Group lessons by module ───────────────────────────────────────────────
-  const moduleGroups: Array<{ title: string; lessons: LessonEntry[] }> = []
+  // ── Build period → subject → lessons groups ───────────────────────────────
+  const usePeriodGrouping = !filterPeriod
+
+  const periodGroups: Array<{
+    period:   string
+    label:    string
+    subjects: Array<{ subject: string; label: string; lessons: LessonEntry[] }>
+  }> = []
+
   for (const lesson of lessons) {
-    const key = lesson.module_title ?? 'Other'
-    const existing = moduleGroups.find(g => g.title === key)
-    if (existing) existing.lessons.push(lesson)
-    else moduleGroups.push({ title: key, lessons: [lesson] })
+    const pKey = usePeriodGrouping ? (lesson.period || 'other') : (filterPeriod || 'selected')
+    let pg = periodGroups.find(g => g.period === pKey)
+    if (!pg) {
+      const label = usePeriodGrouping
+        ? (PERIOD_LABEL[pKey] ?? pKey)
+        : (PERIOD_LABEL[filterPeriod] ?? filterPeriod)
+      pg = { period: pKey, label, subjects: [] }
+      periodGroups.push(pg)
+    }
+    let sg = pg.subjects.find(s => s.subject === lesson.subject)
+    if (!sg) {
+      sg = { subject: lesson.subject, label: SUBJECT_LABEL[lesson.subject] ?? lesson.subject, lessons: [] }
+      pg.subjects.push(sg)
+    }
+    sg.lessons.push(lesson)
   }
+
+  const totalSelected = selectedLessons.reduce((acc, l) => {
+    const sel = sectionSelections[l.quest_id]
+    return acc + (sel === null || sel.length === 0 ? 1 : sel.length)
+  }, 0)
 
   const canSubmit =
     taskType === 'lesson'
       ? selectedLessons.length > 0
-      : !!trialSubject && (trialScope === 'general' || selectedModules.length > 0)
+      : !!trialSubject
+
+  // ── Filter row component (shared pill pattern) ────────────────────────────
+  function PillRow({
+    label, active, options, onSelect, activeClass = 'btn-neutral',
+  }: {
+    label:       string
+    active:      string
+    options:     { value: string; label: string }[]
+    onSelect:    (v: string) => void
+    activeClass?: string
+  }) {
+    return (
+      <div className="flex items-center gap-3">
+        <p className="text-sm font-semibold shrink-0">{label}</p>
+        <div className="flex gap-2 flex-wrap">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => onSelect(o.value)}
+              className={`btn btn-sm rounded-full ${active === o.value ? activeClass : 'btn-ghost border border-base-300'}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-2xl mx-auto w-full px-4 py-6 flex flex-col gap-6">
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.back()} className="text-base-content/50 hover:text-base-content transition-colors">←</button>
         <div>
@@ -274,7 +306,7 @@ export default function AssignActivityPage() {
         </div>
       </div>
 
-      {/* Type toggle */}
+      {/* ── Type toggle ── */}
       <div className="flex gap-2">
         <button
           onClick={() => setTaskType('lesson')}
@@ -282,8 +314,7 @@ export default function AssignActivityPage() {
             taskType === 'lesson' ? 'bg-primary text-primary-content' : 'bg-base-200 hover:bg-base-300'
           }`}
         >
-          <BookOpen size={16} />
-          Lessons
+          <BookOpen size={16} /> Lessons
         </button>
         <button
           onClick={() => setTaskType('trial')}
@@ -291,188 +322,139 @@ export default function AssignActivityPage() {
             taskType === 'trial' ? 'bg-warning text-warning-content' : 'bg-base-200 hover:bg-base-300'
           }`}
         >
-          <ClipboardCheck size={16} />
-          Trial
+          <ClipboardCheck size={16} /> Trial
         </button>
       </div>
 
-      {/* ── Lesson flow ── */}
+      {/* ════════════════ LESSON FLOW ════════════════ */}
       {taskType === 'lesson' && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
 
-          {/* Filter */}
-          <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
-            <p className="font-semibold text-sm">Filter Catalogue</p>
-            <div className="grid grid-cols-2 gap-2">
-              <select value={level} onChange={(e) => setLevel(e.target.value)} className="select select-bordered select-sm w-full">
-                {LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-              </select>
-              <select value={period} onChange={(e) => setPeriod(e.target.value)} className="select select-bordered select-sm w-full">
-                <option value="">All Terms</option>
-                {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </div>
-            <select value={subject} onChange={(e) => setSubject(e.target.value)} className="select select-bordered select-sm w-full">
-              <option value="">All Subjects</option>
-              {SUBJECTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
+          {/* Level filter */}
+          <PillRow
+            label="Level"
+            active={level}
+            options={LEVELS.map(l => ({ value: l.value, label: l.label }))}
+            onSelect={setLevel}
+            activeClass="btn-primary"
+          />
 
-          {/* Catalogue — grouped by module */}
+          {/* Term filter */}
+          <PillRow
+            label="Term"
+            active={filterPeriod}
+            options={[{ value: '', label: 'All Terms' }, ...PERIODS.map(p => ({ value: p.value, label: p.label }))]}
+            onSelect={setFilterPeriod}
+          />
+
+          {/* Catalogue */}
           {lessonsLoading ? (
-            <div className="flex justify-center py-8">
+            <div className="flex justify-center py-10">
               <span className="loading loading-spinner loading-md" />
             </div>
-          ) : moduleGroups.length === 0 ? (
+          ) : periodGroups.length === 0 ? (
             <div className="bg-base-200 rounded-2xl p-8 text-center text-sm text-base-content/50">
-              No lessons found for these filters.
+              No lessons found for this level.
             </div>
           ) : (
-            <div className="flex flex-col gap-4">
-              {moduleGroups.map(({ title: moduleTitle, lessons: groupLessons }) => {
-                const allSelected = groupLessons.every(l => selectedLessons.some(s => s.quest_id === l.quest_id))
-                const someSelected = !allSelected && groupLessons.some(l => selectedLessons.some(s => s.quest_id === l.quest_id))
-                const isExpanded = expandedModules.has(moduleTitle)
+            <div className="flex flex-col gap-6">
+              {periodGroups.map(({ period: pKey, label: pLabel, subjects }) => (
+                <div key={pKey} className="flex flex-col gap-4">
 
-                return (
-                  <div key={moduleTitle} className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2 px-1 mb-1">
-                      <button
-                        onClick={() => toggleExpanded(moduleTitle)}
-                        className="flex items-center gap-1.5 flex-1 text-left min-w-0"
-                      >
-                        {isExpanded
-                          ? <ChevronDown size={13} className="text-base-content/40 shrink-0" />
-                          : <ChevronRight size={13} className="text-base-content/40 shrink-0" />}
-                        <p className="text-xs font-bold text-base-content/40 uppercase tracking-wider truncate">
-                          {moduleTitle}
-                        </p>
-                      </button>
-                      <button
-                        onClick={() => toggleModuleGroup(groupLessons)}
-                        className={`text-xs font-medium px-2.5 py-0.5 rounded-full transition-colors shrink-0 ${
-                          allSelected
-                            ? 'bg-primary text-primary-content'
-                            : someSelected
-                            ? 'bg-primary/20 text-primary'
-                            : 'text-base-content/40 hover:text-primary hover:bg-primary/10'
-                        }`}
-                      >
-                        {allSelected ? 'Deselect all' : 'Select all'}
-                      </button>
+                  {usePeriodGrouping && (
+                    <div className="flex items-center gap-3">
+                      <p className="text-base font-bold">{pLabel}</p>
+                      <div className="flex-1 h-px bg-base-300" />
                     </div>
+                  )}
 
-                    {isExpanded && (
-                      <div className="flex flex-col gap-1.5">
-                        {groupLessons.map((lesson) => {
-                          const isSelected = selectedLessons.some(l => l.quest_id === lesson.quest_id)
-                          const topicLabel = lesson.topic || lesson.module_title
-                          const sectionCount = lesson.objectives?.length ?? 0
-                          return (
+                  {subjects.map(({ subject: sKey, label: sLabel, lessons: subLessons }) => (
+                    <div key={sKey} className="flex flex-col gap-1.5">
+                      <p className="text-xs font-bold text-base-content/40 uppercase tracking-wider px-1">
+                        {sLabel}
+                      </p>
+
+                      {subLessons.map((lesson) => {
+                        const isSelected   = selectedLessons.some(l => l.quest_id === lesson.quest_id)
+                        const sel          = sectionSelections[lesson.quest_id] ?? null
+                        const topicLabel   = lesson.topic || lesson.module_title
+                        const objectives   = lesson.objectives ?? []
+                        const hasSubtopics = objectives.length > 1
+
+                        return (
+                          <div key={lesson.quest_id} className={`rounded-2xl border transition-colors overflow-hidden ${
+                            isSelected ? 'border-primary/30 bg-primary/5' : 'border-base-200 bg-base-100'
+                          }`}>
                             <button
-                              key={lesson.quest_id}
                               onClick={() => toggleLesson(lesson)}
-                              className={`flex items-start gap-3 px-4 py-3 rounded-2xl border text-left transition-colors ${
-                                isSelected
-                                  ? 'bg-primary/10 border-primary/30'
-                                  : 'bg-base-100 border-base-200 hover:bg-base-200'
-                              }`}
+                              className="flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-base-200/50 transition-colors"
                             >
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
                                 isSelected ? 'bg-primary border-primary' : 'border-base-300'
                               }`}>
                                 {isSelected && <Check size={11} className="text-primary-content" />}
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium">{topicLabel}</p>
-                                {sectionCount > 0 && (
-                                  <p className="text-xs text-base-content/40 mt-0.5">
-                                    {sectionCount} section{sectionCount !== 1 ? 's' : ''}
+                              <p className="text-sm font-medium flex-1 min-w-0">{topicLabel}</p>
+                              {isSelected && sel !== null && sel.length > 0 && (
+                                <span className="text-xs text-primary font-semibold shrink-0">
+                                  {sel.length} section{sel.length !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </button>
+
+                            {isSelected && (
+                              <div className="px-4 pb-3 flex flex-col gap-1 border-t border-base-200/60 pt-2">
+                                {!hasSubtopics ? (
+                                  <p className="text-xs text-base-content/40 italic py-1">
+                                    {objectives.length === 1 ? objectives[0] : 'No sub-topics'}
                                   </p>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => selectAllSections(lesson.quest_id)}
+                                      className={`flex items-center gap-2.5 px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
+                                        sel === null ? 'bg-primary/10 text-primary' : 'hover:bg-base-200 text-base-content/60'
+                                      }`}
+                                    >
+                                      <div className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
+                                        sel === null ? 'bg-primary border-primary' : 'border-base-300'
+                                      }`}>
+                                        {sel === null && <Check size={9} className="text-primary-content" />}
+                                      </div>
+                                      <span className="font-medium">All sections</span>
+                                      <span className="text-base-content/30 ml-auto">{objectives.length} sections</span>
+                                    </button>
+
+                                    {objectives.map((obj, i) => {
+                                      const checked = Array.isArray(sel) && sel.includes(i)
+                                      return (
+                                        <button
+                                          key={i}
+                                          onClick={() => toggleSection(lesson.quest_id, i)}
+                                          className={`flex items-center gap-2.5 px-2 py-1.5 rounded-xl text-left text-xs transition-colors ${
+                                            checked ? 'bg-primary/10 text-primary' : 'hover:bg-base-200 text-base-content/60'
+                                          }`}
+                                        >
+                                          <div className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
+                                            checked ? 'bg-primary border-primary' : 'border-base-300'
+                                          }`}>
+                                            {checked && <Check size={9} className="text-primary-content" />}
+                                          </div>
+                                          {obj}
+                                        </button>
+                                      )
+                                    })}
+                                  </>
                                 )}
                               </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Selection summary with per-lesson section picker */}
-          {selectedLessons.length > 0 && (
-            <div className="bg-primary/10 border border-primary/20 rounded-2xl p-3 flex flex-col gap-3">
-              <p className="text-xs font-semibold text-primary">
-                {selectedLessons.length} sub-topic{selectedLessons.length !== 1 ? 's' : ''} selected
-              </p>
-              <div className="flex flex-col gap-2">
-                {selectedLessons.map(l => {
-                  const sectionIdx = sectionSelections[l.quest_id] ?? null
-                  const objectives = l.objectives ?? []
-                  const topicLabel = l.topic || l.module_title
-                  return (
-                    <div key={l.quest_id} className="bg-base-100 rounded-xl p-3 flex flex-col gap-2.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold truncate">{topicLabel}</p>
-                          <p className="text-xs text-base-content/40 mt-0.5">
-                            {objectives.length > 0
-                              ? sectionIdx !== null
-                                ? `Section ${sectionIdx + 1} of ${objectives.length}`
-                                : `All ${objectives.length} sections`
-                              : 'Full lesson'}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => toggleLesson(l)}
-                          className="text-xs text-base-content/30 hover:text-error transition-colors shrink-0 mt-0.5"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      {objectives.length > 1 && (
-                        <div className="flex flex-col gap-1">
-                          <p className="text-xs text-base-content/40 font-medium">Assign section:</p>
-                          <div className="flex gap-1.5 flex-wrap">
-                            <button
-                              onClick={() => setSectionForLesson(l.quest_id, null)}
-                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                                sectionIdx === null
-                                  ? 'bg-primary text-primary-content border-primary'
-                                  : 'border-base-300 hover:border-primary/50 text-base-content/60'
-                              }`}
-                            >
-                              All
-                            </button>
-                            {objectives.map((obj: string, i: number) => (
-                              <button
-                                key={i}
-                                onClick={() => setSectionForLesson(l.quest_id, i)}
-                                title={obj}
-                                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                                  sectionIdx === i
-                                    ? 'bg-primary text-primary-content border-primary'
-                                    : 'border-base-300 hover:border-primary/50 text-base-content/60'
-                                }`}
-                              >
-                                §{i + 1}
-                              </button>
-                            ))}
+                            )}
                           </div>
-                          {sectionIdx !== null && objectives[sectionIdx] && (
-                            <p className="text-xs text-primary/70 leading-snug mt-0.5">
-                              §{sectionIdx + 1} — {objectives[sectionIdx]}
-                            </p>
-                          )}
-                        </div>
-                      )}
+                        )
+                      })}
                     </div>
-                  )
-                })}
-              </div>
+                  ))}
+                </div>
+              ))}
             </div>
           )}
 
@@ -489,101 +471,135 @@ export default function AssignActivityPage() {
         </div>
       )}
 
-      {/* ── Trial flow ── */}
+      {/* ════════════════ TRIAL FLOW ════════════════ */}
       {taskType === 'trial' && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
 
-          <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
-            <p className="font-semibold text-sm">Curriculum</p>
-            <select
-              value={trialSubject}
-              onChange={(e) => setTrialSubject(e.target.value)}
-              className="select select-bordered select-sm w-full"
-            >
-              <option value="">Select subject…</option>
-              {SUBJECTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-            <div className="grid grid-cols-2 gap-2">
-              <select value={trialLevel} onChange={(e) => setTrialLevel(e.target.value)} className="select select-bordered select-sm w-full">
-                {LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-              </select>
-              <select value={trialPeriod} onChange={(e) => setTrialPeriod(e.target.value)} className="select select-bordered select-sm w-full">
-                <option value="">All Terms</option>
-                {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </div>
-          </div>
+          {/* Subject pills */}
+          <PillRow
+            label="Subject"
+            active={trialSubject}
+            options={SUBJECTS.map(s => ({ value: s.value, label: s.label }))}
+            onSelect={(v) => { setTrialSubject(v); setSelectedModules([]) }}
+            activeClass="btn-warning"
+          />
 
-          <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
-            <p className="font-semibold text-sm">Trial Type</p>
-            <div className="flex gap-2 flex-wrap">
-              {(['general', 'single', 'multi'] as TrialScope[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => { setTrialScope(s); setSelectedModules([]) }}
-                  className={`btn btn-sm rounded-full ${trialScope === s ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
-                >
-                  {s === 'general' ? 'General' : s === 'single' ? 'Single Topic' : 'Multi-Topic'}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-base-content/50">
-              {trialScope === 'general'
-                ? 'Draws from the full question bank — all topics in scope.'
-                : trialScope === 'single'
-                ? 'Select one module below — questions are scoped to that topic.'
-                : 'Select two or more modules — questions span the chosen topics.'}
-            </p>
+          {/* Level pills */}
+          <PillRow
+            label="Level"
+            active={trialLevel}
+            options={LEVELS.map(l => ({ value: l.value, label: l.label }))}
+            onSelect={setTrialLevel}
+            activeClass="btn-primary"
+          />
 
-            {trialScope !== 'general' && trialSubject && (
-              <div className="flex flex-col gap-2">
-                {modulesLoading ? (
-                  <div className="flex justify-center py-2"><span className="loading loading-dots loading-sm" /></div>
-                ) : modules.length === 0 ? (
-                  <p className="text-xs text-base-content/40 text-center">No modules found for this selection.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {modules.map((m) => (
-                      <button
-                        key={m.module_number}
-                        onClick={() => toggleModule(m.module_number)}
-                        className={`btn btn-sm rounded-full ${selectedModules.includes(m.module_number) ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
-                      >
-                        {m.module_title}
-                      </button>
-                    ))}
+          {/* Term pills */}
+          <PillRow
+            label="Term"
+            active={trialPeriod}
+            options={[{ value: '', label: 'All Terms' }, ...PERIODS.map(p => ({ value: p.value, label: p.label }))]}
+            onSelect={setTrialPeriod}
+          />
+
+          {/* Topic catalogue — loads once subject is selected */}
+          {trialSubject && (
+            <>
+              {modulesLoading ? (
+                <div className="flex justify-center py-8">
+                  <span className="loading loading-spinner loading-md" />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-bold text-base-content/40 uppercase tracking-wider px-1">
+                    Topics
+                  </p>
+
+                  {/* All Topics row */}
+                  <div className={`rounded-2xl border transition-colors overflow-hidden ${
+                    selectedModules.length === 0 ? 'border-warning/30 bg-warning/5' : 'border-base-200 bg-base-100'
+                  }`}>
+                    <button
+                      onClick={() => setSelectedModules([])}
+                      className="flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-base-200/50 transition-colors"
+                    >
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                        selectedModules.length === 0 ? 'bg-warning border-warning' : 'border-base-300'
+                      }`}>
+                        {selectedModules.length === 0 && <Check size={11} className="text-warning-content" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">All Topics</p>
+                        <p className="text-xs text-base-content/40 mt-0.5">Draws from the full question bank</p>
+                      </div>
+                    </button>
                   </div>
-                )}
+
+                  {/* Individual topic rows */}
+                  {modules.length === 0 ? (
+                    <p className="text-xs text-base-content/40 text-center py-4">No topics found for this selection.</p>
+                  ) : (
+                    modules.map((m) => {
+                      const isSelected = selectedModules.includes(m.module_number)
+                      return (
+                        <div key={m.module_number} className={`rounded-2xl border transition-colors overflow-hidden ${
+                          isSelected ? 'border-warning/30 bg-warning/5' : 'border-base-200 bg-base-100'
+                        }`}>
+                          <button
+                            onClick={() => toggleModule(m.module_number)}
+                            className="flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-base-200/50 transition-colors"
+                          >
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                              isSelected ? 'bg-warning border-warning' : 'border-base-300'
+                            }`}>
+                              {isSelected && <Check size={11} className="text-warning-content" />}
+                            </div>
+                            <p className="text-sm font-medium flex-1 min-w-0">{m.module_title}</p>
+                          </button>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* Settings */}
+              <div className="flex flex-col gap-4 pt-1">
+                <div className="h-px bg-base-200" />
+
+                {/* Title */}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-sm font-semibold">Title</p>
+                  <input
+                    type="text"
+                    placeholder="Activity title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="input input-bordered input-sm w-full"
+                  />
+                </div>
+
+                {/* Difficulty pills */}
+                <PillRow
+                  label="Difficulty"
+                  active={difficulty}
+                  options={DIFFICULTIES.map(d => ({ value: d.value, label: d.label }))}
+                  onSelect={setDifficulty}
+                  activeClass="btn-primary"
+                />
+
+                {/* Due date */}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-sm font-semibold">Due Date (optional)</p>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="input input-bordered input-sm w-full"
+                  />
+                </div>
               </div>
-            )}
-
-            {trialScope !== 'general' && selectedModules.length > 0 && (
-              <p className="text-xs text-base-content/50 text-center">
-                {selectedModules.length === 1 ? '1 topic selected' : `${selectedModules.length} topics selected`}
-              </p>
-            )}
-          </div>
-
-          <div className="bg-base-200 rounded-2xl p-4 flex flex-col gap-3">
-            <p className="font-semibold text-sm">Settings</p>
-            <input
-              type="text"
-              placeholder="Activity title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="input input-bordered input-sm w-full"
-            />
-            <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="select select-bordered select-sm w-full">
-              <option value="">Any Difficulty</option>
-              {DIFFICULTIES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-            </select>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="input input-bordered input-sm w-full"
-            />
-          </div>
+            </>
+          )}
         </div>
       )}
 
@@ -596,8 +612,8 @@ export default function AssignActivityPage() {
       >
         {submitting ? (
           <span className="loading loading-spinner loading-xs" />
-        ) : taskType === 'lesson' && selectedLessons.length > 0 ? (
-          `Assign ${selectedLessons.length} Sub-Topic${selectedLessons.length !== 1 ? 's' : ''}`
+        ) : taskType === 'lesson' && totalSelected > 0 ? (
+          `Assign ${totalSelected} Task${totalSelected !== 1 ? 's' : ''}`
         ) : (
           'Assign Activity'
         )}

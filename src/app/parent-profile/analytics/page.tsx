@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -89,6 +89,26 @@ const SUBJECT_EMOJI: Record<string, string> = {
   'Mathematics': '📐', 'English Language Arts': '📖',
   'Language Arts': '📖', 'Science': '🔬', 'Social Studies': '🌍',
 }
+const SUBJECT_DISPLAY: Record<string, string> = {
+  math: 'Mathematics', english: 'English Language Arts',
+  science: 'Science', social_studies: 'Social Studies',
+}
+const SUBJECT_SHORT_LABEL: Record<string, string> = {
+  'Mathematics': 'Maths', 'English Language Arts': 'English',
+  'Language Arts': 'English', 'Science': 'Science', 'Social Studies': 'Social Studies',
+}
+const SUBJECT_THEME: Record<string, { bg: string; border: string; text: string; bar: string; faint: string }> = {
+  'Mathematics':           { bg: 'bg-warning/10',   border: 'border-warning/25',   text: 'text-warning',   bar: 'bg-warning',   faint: 'bg-warning/20'   },
+  'English Language Arts': { bg: 'bg-info/10',      border: 'border-info/25',      text: 'text-info',      bar: 'bg-info',      faint: 'bg-info/20'      },
+  'Language Arts':         { bg: 'bg-info/10',      border: 'border-info/25',      text: 'text-info',      bar: 'bg-info',      faint: 'bg-info/20'      },
+  'Science':               { bg: 'bg-success/10',   border: 'border-success/25',   text: 'text-success',   bar: 'bg-success',   faint: 'bg-success/20'   },
+  'Social Studies':        { bg: 'bg-secondary/10', border: 'border-secondary/25', text: 'text-secondary', bar: 'bg-secondary', faint: 'bg-secondary/20' },
+}
+const DEFAULT_THEME = { bg: 'bg-base-200', border: 'border-base-300', text: 'text-base-content', bar: 'bg-primary', faint: 'bg-base-300' }
+
+function normalizeSubject(subj: string): string {
+  return SUBJECT_DISPLAY[subj] ?? subj
+}
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 
@@ -132,11 +152,14 @@ function Sparkline({ trend }: { trend: TrendPoint[] }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ParentAnalyticsPage() {
-  const [children, setChildren]   = useState<(ChildAnalytics & { nickname: string; avatar_index: number })[]>([])
-  const [data, setData]           = useState<ChildAnalytics | null>(null)
-  const [activeIdx, setActiveIdx] = useState(0)
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState('')
+  const [children,        setChildren]        = useState<(ChildAnalytics & { nickname: string; avatar_index: number })[]>([])
+  const [data,            setData]            = useState<ChildAnalytics | null>(null)
+  const [activeIdx,       setActiveIdx]       = useState(0)
+  const [loading,         setLoading]         = useState(true)
+  const [error,           setError]           = useState('')
+  const [animate,         setAnimate]         = useState(false)
+  const [selectedSubject, setSelectedSubject] = useState('')
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     fetch('/api/analytics/self')
@@ -148,14 +171,19 @@ export default function ParentAnalyticsPage() {
         } else {
           setData(json)
         }
+        animTimerRef.current = setTimeout(() => setAnimate(true), 80)
       })
       .catch(() => setError('Could not load analytics.'))
       .finally(() => setLoading(false))
+    return () => { if (animTimerRef.current) clearTimeout(animTimerRef.current) }
   }, [])
 
   function switchChild(idx: number) {
     setActiveIdx(idx)
     setData(children[idx])
+    setSelectedSubject('')
+    setAnimate(false)
+    setTimeout(() => setAnimate(true), 80)
   }
 
   if (loading) {
@@ -177,6 +205,16 @@ export default function ParentAnalyticsPage() {
 
   const avatar = data.avatar_index ?? 1
   const name   = data.nickname || `Child #${data.user_id}`
+
+  const subjectList = Array.from(new Set([
+    ...data.strengths.map(t => normalizeSubject(t.subject)),
+    ...data.weaknesses.map(t => normalizeSubject(t.subject)),
+    ...data.retry_effectiveness.map(r => normalizeSubject(r.subject)),
+  ]))
+  const filteredStrengths  = selectedSubject ? data.strengths.filter(t => normalizeSubject(t.subject) === selectedSubject) : data.strengths
+  const filteredWeaknesses = selectedSubject ? data.weaknesses.filter(t => normalizeSubject(t.subject) === selectedSubject) : data.weaknesses
+  const filteredRetry      = selectedSubject ? data.retry_effectiveness.filter(r => normalizeSubject(r.subject) === selectedSubject) : data.retry_effectiveness.slice(0, 4)
+  const hasInsights        = data.strengths.length > 0 || data.weaknesses.length > 0 || data.retry_effectiveness.length > 0
 
   return (
     <div className="flex flex-col gap-5 max-w-2xl mx-auto w-full">
@@ -275,67 +313,104 @@ export default function ParentAnalyticsPage() {
         </>
       )}
 
-      {/* Strengths & Weaknesses */}
-      {(data.strengths.length > 0 || data.weaknesses.length > 0) && (
-        <>
-          <div className="flex items-center gap-3">
-            <p className="font-semibold text-base">Strengths &amp; Weaknesses</p>
-            <div className="flex-1 h-px bg-base-200" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {data.strengths.length > 0 && (
-              <div className="bg-base-200 rounded-2xl p-3 flex flex-col gap-2">
-                <p className="text-sm font-semibold text-success">Strengths ✓</p>
-                {data.strengths.slice(0, 5).map((t, i) => (
-                  <div key={i} className="flex items-start justify-between gap-1">
-                    <p className="text-xs text-base-content/70 leading-snug flex-1 truncate">{t.topic}</p>
-                    <span className="text-xs font-bold text-success shrink-0">{fmt(t.correct_rate)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {data.weaknesses.length > 0 && (
-              <div className="bg-base-200 rounded-2xl p-3 flex flex-col gap-2">
-                <p className="text-sm font-semibold text-error">Needs Work ✗</p>
-                {data.weaknesses.slice(0, 5).map((t, i) => (
-                  <div key={i} className="flex items-start justify-between gap-1">
-                    <p className="text-xs text-base-content/70 leading-snug flex-1 truncate">{t.topic}</p>
-                    <span className="text-xs font-bold text-error shrink-0">{fmt(t.correct_rate)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
+      {/* Subject pills — controls all three insight cards */}
+      {hasInsights && (
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setSelectedSubject('')}
+            className={`btn btn-sm rounded-full ${selectedSubject === '' ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
+          >
+            All
+          </button>
+          {subjectList.map(subj => (
+            <button
+              key={subj}
+              onClick={() => setSelectedSubject(subj === selectedSubject ? '' : subj)}
+              className={`btn btn-sm rounded-full ${selectedSubject === subj ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
+            >
+              {SUBJECT_SHORT_LABEL[subj] ?? subj}
+            </button>
+          ))}
+        </div>
       )}
 
-      {/* Improvement tracker */}
-      {data.retry_effectiveness.length > 0 && (
-        <>
-          <div className="flex items-center gap-3">
-            <p className="font-semibold text-base">Showing Improvement</p>
-            <div className="flex-1 h-px bg-base-200" />
+      {/* Strengths — green card */}
+      {filteredStrengths.length > 0 && (
+        <div className="rounded-2xl p-4 border bg-success/10 border-success/25">
+          <p className="font-bold text-sm mb-3 text-success">What they&apos;re great at ✨</p>
+          <div className="flex flex-wrap gap-2">
+            {filteredStrengths.map((t, i) => (
+              <div key={i} className="flex items-center gap-1.5 bg-success/20 border border-success/30 rounded-xl px-3 py-1.5">
+                <span className="text-xs font-semibold text-success">{t.topic}</span>
+                <span className="text-xs text-success/70">{fmt(t.correct_rate)}</span>
+              </div>
+            ))}
           </div>
-          <div className="bg-base-200 rounded-2xl p-4">
-            <div className="flex flex-col gap-3">
-              {data.retry_effectiveness.slice(0, 3).map((r, i) => (
+        </div>
+      )}
+
+      {/* Weaknesses — yellow card */}
+      {filteredWeaknesses.length > 0 && (
+        <div className="rounded-2xl p-4 border bg-warning/10 border-warning/25">
+          <p className="font-bold text-sm mb-3 text-base-content">Needs more practice 🎯</p>
+          <div className="flex flex-col gap-2">
+            {filteredWeaknesses.map((t, i) => {
+              const subj  = normalizeSubject(t.subject)
+              const theme = SUBJECT_THEME[subj] ?? DEFAULT_THEME
+              return (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-base">{SUBJECT_EMOJI[subj] ?? '📚'}</span>
+                    <span className="text-sm text-base-content/80 truncate">{t.topic}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className={`w-20 h-2 rounded-full overflow-hidden ${theme.faint}`}>
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ${theme.bar}`}
+                        style={{ width: animate ? `${Math.min(t.correct_rate ?? 0, 100)}%` : '0%' }}
+                      />
+                    </div>
+                    <span className={`text-xs font-semibold ${theme.text} w-8 text-right`}>{fmt(t.correct_rate)}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Improvement tracker — blue card */}
+      {filteredRetry.length > 0 && (
+        <div className="rounded-2xl p-4 border bg-info/10 border-info/25">
+          <p className="font-bold text-sm mb-3 text-info">Showing improvement 📈</p>
+          <div className="flex flex-col gap-3">
+            {filteredRetry.map((r, i) => {
+              const subj  = normalizeSubject(r.subject)
+              const theme = SUBJECT_THEME[subj] ?? DEFAULT_THEME
+              return (
                 <div key={i}>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-base-content/70 truncate flex-1 pr-2">{r.topic}</span>
-                    <span className={`font-semibold shrink-0 ${r.improvement > 0 ? 'text-success' : 'text-base-content/50'}`}>
-                      {r.improvement > 0 ? `+${r.improvement}%` : `${r.improvement}%`}
-                    </span>
+                    {r.improvement > 0
+                      ? <span className={`font-bold shrink-0 ${theme.text}`}>+{r.improvement}% better!</span>
+                      : <span className="font-semibold text-base-content/50 shrink-0">{r.improvement}%</span>
+                    }
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-base-content/50">
-                    <span>First: <b className="text-base-content/70">{Math.round(r.first_attempt)}%</b></span>
-                    <span>→</span>
-                    <span>Now: <b className={r.improvement > 0 ? 'text-success' : 'text-base-content/70'}>{r.subsequent_avg}%</b></span>
+                  <div className="flex items-center gap-1 text-[11px] text-base-content/50">
+                    <span>{Math.round(r.first_attempt)}%</span>
+                    <div className={`flex-1 h-1.5 rounded-full overflow-hidden mx-1 ${theme.faint}`}>
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ${theme.bar}`}
+                        style={{ width: animate ? `${Math.min(r.subsequent_avg, 100)}%` : '0%' }}
+                      />
+                    </div>
+                    <span className={r.improvement > 0 ? `${theme.text} font-semibold` : ''}>{r.subsequent_avg}%</span>
                   </div>
                 </div>
-              ))}
-            </div>
+              )
+            })}
           </div>
-        </>
+        </div>
       )}
 
       {/* Recent activity */}

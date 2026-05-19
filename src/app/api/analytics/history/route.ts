@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
     if (searchParams.get('type'))     qs.set('type',     searchParams.get('type')!)
     if (searchParams.get('page'))     qs.set('page',     searchParams.get('page')!)
     if (searchParams.get('per_page')) qs.set('per_page', searchParams.get('per_page')!)
+    if (searchParams.get('month'))    qs.set('month',    searchParams.get('month')!)
+    if (searchParams.get('year'))     qs.set('year',     searchParams.get('year')!)
 
     const data = await wpFetch(`/analytics/history?${qs}`, 'GET', undefined, token)
     return NextResponse.json(data)

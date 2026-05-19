@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { BookOpen, ClipboardCheck, Compass, ChevronRight } from 'lucide-react'
 import Breadcrumb from '@/components/child/Breadcrumb'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -35,14 +37,6 @@ interface RetryItem {
   improvement: number
 }
 
-interface RecentTrial {
-  subject: string
-  topic: string | null
-  difficulty: string
-  percentage: number | null
-  completed_at: string
-}
-
 interface ChildAnalytics {
   user_id: number
   nickname?: string
@@ -56,7 +50,17 @@ interface ChildAnalytics {
   weaknesses: TopicItem[]
   trend: TrendPoint[]
   retry_effectiveness: RetryItem[]
-  recent_trials: RecentTrial[]
+}
+
+interface ActivityItem {
+  type:          'trial' | 'quest' | 'lesson'
+  session_id:    string | number
+  subject:       string | null
+  topic:         string | null
+  module_title:  string | null
+  difficulty:    string | null
+  percentage:    number | null
+  completed_at:  string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -97,6 +101,37 @@ const SUBJECT_EMOJI: Record<string, string> = {
 
 const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }
 
+const SUBJECT_DISPLAY: Record<string, string> = {
+  math: 'Mathematics', english: 'English Language Arts',
+  science: 'Science', social_studies: 'Social Studies',
+}
+
+// Short pill labels for display-name subjects
+const SUBJECT_SHORT_LABEL: Record<string, string> = {
+  'Mathematics': 'Maths', 'English Language Arts': 'English',
+  'Language Arts': 'English', 'Science': 'Science', 'Social Studies': 'Social Studies',
+}
+
+// Colour scheme per display-name subject — all classes must be complete strings (Tailwind purge)
+const SUBJECT_THEME: Record<string, { bg: string; border: string; text: string; bar: string; faint: string }> = {
+  'Mathematics':           { bg: 'bg-warning/10',   border: 'border-warning/25',   text: 'text-warning',   bar: 'bg-warning',   faint: 'bg-warning/20'   },
+  'English Language Arts': { bg: 'bg-info/10',      border: 'border-info/25',      text: 'text-info',      bar: 'bg-info',      faint: 'bg-info/20'      },
+  'Language Arts':         { bg: 'bg-info/10',      border: 'border-info/25',      text: 'text-info',      bar: 'bg-info',      faint: 'bg-info/20'      },
+  'Science':               { bg: 'bg-success/10',   border: 'border-success/25',   text: 'text-success',   bar: 'bg-success',   faint: 'bg-success/20'   },
+  'Social Studies':        { bg: 'bg-secondary/10', border: 'border-secondary/25', text: 'text-secondary', bar: 'bg-secondary', faint: 'bg-secondary/20' },
+}
+const DEFAULT_THEME = { bg: 'bg-base-200', border: 'border-base-300', text: 'text-base-content', bar: 'bg-primary', faint: 'bg-base-300' }
+
+function normalizeSubject(subj: string): string {
+  return SUBJECT_DISPLAY[subj] ?? subj
+}
+
+const ACTIVITY_CONFIG = {
+  trial:  { label: 'Trial',  Icon: ClipboardCheck, badge: 'badge-warning',  bg: 'bg-warning/10 text-warning'  },
+  quest:  { label: 'Quest',  Icon: Compass,        badge: 'badge-success',  bg: 'bg-success/10 text-success'  },
+  lesson: { label: 'Lesson', Icon: BookOpen,        badge: 'badge-primary',  bg: 'bg-primary/10 text-primary'  },
+} as const
+
 // ── Score count-up ────────────────────────────────────────────────────────────
 
 function useCountUp(target: number, active: boolean): number {
@@ -124,20 +159,23 @@ function useCountUp(target: number, active: boolean): number {
 export default function MyProgressPage() {
   const router = useRouter()
 
-  const [data, setData]       = useState<ChildAnalytics | null>(null)
-  const [animate, setAnimate] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState('')
+  const [data,            setData]            = useState<ChildAnalytics | null>(null)
+  const [activity,        setActivity]        = useState<ActivityItem[]>([])
+  const [animate,         setAnimate]         = useState(false)
+  const [loading,         setLoading]         = useState(true)
+  const [error,           setError]           = useState('')
+  const [selectedSubject, setSelectedSubject] = useState('')
 
   useEffect(() => {
-    fetch('/api/analytics/child-self')
-      .then((r) => r.json())
-      .then((json) => {
-        setData(json)
-        setTimeout(() => setAnimate(true), 80)
-      })
-      .catch(() => setError('Could not load your progress.'))
-      .finally(() => setLoading(false))
+    Promise.allSettled([
+      fetch('/api/analytics/child-self').then((r) => r.json()),
+      fetch('/api/analytics/history?per_page=5').then((r) => r.json()),
+    ]).then(([analyticsRes, historyRes]) => {
+      if (analyticsRes.status === 'fulfilled') setData(analyticsRes.value)
+      else setError('Could not load your progress.')
+      if (historyRes.status === 'fulfilled') setActivity(historyRes.value.items ?? [])
+      setTimeout(() => setAnimate(true), 80)
+    }).finally(() => setLoading(false))
   }, [])
 
   const displayScore = useCountUp(Math.round(data?.avg_score ?? 0), animate && data !== null)
@@ -162,6 +200,23 @@ export default function MyProgressPage() {
 
   const tier = heroTier(data.avg_score)
   const hasActivity = data.trial_count > 0 || data.quest_count > 0
+
+  // Subject filter — covers all three insight sections
+  const subjectList = Array.from(new Set([
+    ...data.strengths.map(t => normalizeSubject(t.subject)),
+    ...data.weaknesses.map(t => normalizeSubject(t.subject)),
+    ...data.retry_effectiveness.map(r => normalizeSubject(r.subject)),
+  ]))
+  const filteredStrengths = selectedSubject
+    ? data.strengths.filter(t => normalizeSubject(t.subject) === selectedSubject)
+    : data.strengths
+  const filteredWeaknesses = selectedSubject
+    ? data.weaknesses.filter(t => normalizeSubject(t.subject) === selectedSubject)
+    : data.weaknesses
+  const filteredRetry = selectedSubject
+    ? data.retry_effectiveness.filter(r => normalizeSubject(r.subject) === selectedSubject)
+    : data.retry_effectiveness.slice(0, 4)
+  const hasInsights = data.strengths.length > 0 || data.weaknesses.length > 0 || data.retry_effectiveness.length > 0
 
   return (
     <div className={`flex flex-col gap-4 pb-8 transition-all duration-500 ${animate ? 'opacity-100' : 'opacity-0'}`}>
@@ -199,13 +254,34 @@ export default function MyProgressPage() {
         ))}
       </div>
 
-      {/* Strengths — celebratory */}
-      {data.strengths.length > 0 && (
-        <div className="bg-base-200 rounded-2xl p-4">
+      {/* Subject pills — controls all three insight cards */}
+      {hasInsights && (
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setSelectedSubject('')}
+            className={`btn btn-sm rounded-full ${selectedSubject === '' ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
+          >
+            All
+          </button>
+          {subjectList.map(subj => (
+            <button
+              key={subj}
+              onClick={() => setSelectedSubject(subj === selectedSubject ? '' : subj)}
+              className={`btn btn-sm rounded-full ${selectedSubject === subj ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
+            >
+              {SUBJECT_SHORT_LABEL[subj] ?? subj}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Strengths — green card */}
+      {filteredStrengths.length > 0 && (
+        <div className="rounded-2xl p-4 border bg-success/10 border-success/25">
           <p className="font-bold text-sm mb-3 text-success">What you&apos;re great at ✨</p>
           <div className="flex flex-wrap gap-2">
-            {data.strengths.map((t, i) => (
-              <div key={i} className="flex items-center gap-1.5 bg-success/10 border border-success/20 rounded-xl px-3 py-1.5">
+            {filteredStrengths.map((t, i) => (
+              <div key={i} className="flex items-center gap-1.5 bg-success/20 border border-success/30 rounded-xl px-3 py-1.5">
                 <span className="text-xs font-semibold text-success">{t.topic}</span>
                 <span className="text-xs text-success/70">{fmt(t.correct_rate)}</span>
               </div>
@@ -214,53 +290,66 @@ export default function MyProgressPage() {
         </div>
       )}
 
-      {/* Weaknesses — framed as challenges */}
-      {data.weaknesses.length > 0 && (
-        <div className="bg-base-200 rounded-2xl p-4">
-          <p className="font-bold text-sm mb-3 text-warning">Level up these topics 🎯</p>
+      {/* Weaknesses — yellow/amber card (matches Trial/practice color) */}
+      {filteredWeaknesses.length > 0 && (
+        <div className="rounded-2xl p-4 border bg-warning/10 border-warning/25">
+          <p className="font-bold text-sm mb-3 text-base-content">Level up these topics 🎯</p>
           <div className="flex flex-col gap-2">
-            {data.weaknesses.map((t, i) => (
-              <div key={i} className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base">{SUBJECT_EMOJI[t.subject] ?? '📚'}</span>
-                  <span className="text-sm text-base-content/80 truncate">{t.topic}</span>
+            {filteredWeaknesses.map((t, i) => {
+              const subj  = normalizeSubject(t.subject)
+              const theme = SUBJECT_THEME[subj] ?? DEFAULT_THEME
+              return (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-base">{SUBJECT_EMOJI[subj] ?? '📚'}</span>
+                    <span className="text-sm text-base-content/80 truncate">{t.topic}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className={`w-20 h-2 rounded-full overflow-hidden ${theme.faint}`}>
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ${theme.bar}`}
+                        style={{ width: animate ? `${Math.min(t.correct_rate ?? 0, 100)}%` : '0%' }}
+                      />
+                    </div>
+                    <span className={`text-xs font-semibold ${theme.text} w-8 text-right`}>{fmt(t.correct_rate)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <progress className="progress progress-warning w-20 h-2" value={t.correct_rate ?? 0} max={100} />
-                  <span className="text-xs font-semibold text-warning w-8 text-right">{fmt(t.correct_rate)}</span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
 
-      {/* Improvement tracker */}
-      {data.retry_effectiveness.length > 0 && (
-        <div className="bg-base-200 rounded-2xl p-4">
-          <p className="font-bold text-sm mb-3">Your improvement 📈</p>
+      {/* Improvement tracker — blue/info card (matches Lesson color) */}
+      {filteredRetry.length > 0 && (
+        <div className="rounded-2xl p-4 border bg-info/10 border-info/25">
+          <p className="font-bold text-sm mb-3 text-info">Your improvement 📈</p>
           <div className="flex flex-col gap-3">
-            {data.retry_effectiveness.slice(0, 4).map((r, i) => (
-              <div key={i}>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-base-content/70 truncate flex-1 pr-2">{r.topic}</span>
-                  {r.improvement > 0
-                    ? <span className="font-bold text-success shrink-0">+{r.improvement}% better!</span>
-                    : <span className="font-semibold text-base-content/50 shrink-0">{r.improvement}%</span>
-                  }
-                </div>
-                <div className="flex items-center gap-1 text-[11px] text-base-content/50">
-                  <span>{Math.round(r.first_attempt)}%</span>
-                  <div className="flex-1 h-1.5 bg-base-300 rounded-full overflow-hidden mx-1">
-                    <div
-                      className={`h-full rounded-full transition-all duration-1000 ${r.improvement > 0 ? 'bg-success' : 'bg-base-content/30'}`}
-                      style={{ width: animate ? `${Math.min(r.subsequent_avg, 100)}%` : '0%' }}
-                    />
+            {filteredRetry.map((r, i) => {
+              const subj  = normalizeSubject(r.subject)
+              const theme = SUBJECT_THEME[subj] ?? DEFAULT_THEME
+              return (
+                <div key={i}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-base-content/70 truncate flex-1 pr-2">{r.topic}</span>
+                    {r.improvement > 0
+                      ? <span className={`font-bold shrink-0 ${theme.text}`}>+{r.improvement}% better!</span>
+                      : <span className="font-semibold text-base-content/50 shrink-0">{r.improvement}%</span>
+                    }
                   </div>
-                  <span className={r.improvement > 0 ? 'text-success font-semibold' : ''}>{r.subsequent_avg}%</span>
+                  <div className="flex items-center gap-1 text-[11px] text-base-content/50">
+                    <span>{Math.round(r.first_attempt)}%</span>
+                    <div className={`flex-1 h-1.5 rounded-full overflow-hidden mx-1 ${theme.faint}`}>
+                      <div
+                        className={`h-full rounded-full transition-all duration-1000 ${theme.bar}`}
+                        style={{ width: animate ? `${Math.min(r.subsequent_avg, 100)}%` : '0%' }}
+                      />
+                    </div>
+                    <span className={r.improvement > 0 ? `${theme.text} font-semibold` : ''}>{r.subsequent_avg}%</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -286,21 +375,49 @@ export default function MyProgressPage() {
         </div>
       )}
 
-      {/* Recent trials */}
-      {data.recent_trials.length > 0 && (
+      {/* My Activity */}
+      {activity.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="font-bold text-sm">Recent Trials</p>
-          {data.recent_trials.slice(0, 5).map((t, i) => (
-            <div key={i} className="bg-base-200 rounded-xl px-4 py-3 flex items-center justify-between">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{t.subject}</p>
-                <p className="text-xs text-base-content/50">
-                  {t.topic ? `${t.topic} · ` : ''}{DIFFICULTY_LABEL[t.difficulty] ?? t.difficulty} · {relativeDate(t.completed_at)}
-                </p>
+          <div className="flex items-center justify-between">
+            <p className="font-bold text-sm">My Activity</p>
+            <Link
+              href="/child/my-progress/activity"
+              className="flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+            >
+              View All <ChevronRight size={12} />
+            </Link>
+          </div>
+          {activity.map((item, i) => {
+            const cfg  = ACTIVITY_CONFIG[item.type]
+            const Icon = cfg.Icon
+            const isTrial = item.type === 'trial'
+            const name = item.topic ?? item.module_title ?? (item.subject ? (SUBJECT_DISPLAY[item.subject] ?? item.subject) : null)
+            // Quests/lessons: "Quest: Name". Trials: subject name.
+            const label = isTrial
+              ? (item.subject ? (SUBJECT_DISPLAY[item.subject] ?? item.subject) : cfg.label)
+              : `${cfg.label}: ${name ?? cfg.label}`
+            const sub = [
+              !isTrial && item.subject ? (SUBJECT_DISPLAY[item.subject] ?? item.subject) : null,
+              isTrial && item.difficulty ? (DIFFICULTY_LABEL[item.difficulty] ?? item.difficulty) : null,
+              relativeDate(item.completed_at),
+            ].filter(Boolean).join(' · ')
+            return (
+              <div key={i} className="bg-base-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${cfg.bg}`}>
+                  <Icon size={15} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{label}</p>
+                  {sub && <p className="text-xs text-base-content/50 truncate">{sub}</p>}
+                </div>
+                {isTrial && item.percentage != null ? (
+                  <span className={`text-sm font-bold shrink-0 ${scoreColor(item.percentage)}`}>{fmt(item.percentage)}</span>
+                ) : !isTrial ? (
+                  <span className="badge badge-ghost badge-sm shrink-0">Completed</span>
+                ) : null}
               </div>
-              <span className={`text-sm font-bold shrink-0 ml-3 ${scoreColor(t.percentage)}`}>{fmt(t.percentage)}</span>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

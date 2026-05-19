@@ -6,15 +6,16 @@ import Image from 'next/image'
 import Link from 'next/link'
 import {
   Menu, Gem,
-  Home, Users, Bell, Settings2, Newspaper,
+  Home, Users, Bell, Settings2, Newspaper, BarChart2, AlertTriangle,
 } from 'lucide-react'
 import type { TeacherProfile, ClassEntry } from '@/types/knowly'
 import { useUnreadCount } from '@/hooks/useUnreadCount'
 
 const MAIN_NAV = [
-  { label: 'Home',          Icon: Home,  href: '/teacher/home',          iconClass: 'bg-primary/10 text-primary' },
-  { label: 'Classes',       Icon: Users, href: '/teacher/classes',        iconClass: 'bg-success/10 text-success' },
-  { label: 'Notifications', Icon: Bell,  href: '/teacher/notifications',  iconClass: 'bg-warning/10 text-warning' },
+  { label: 'Home',          Icon: Home,     href: '/teacher/home',          iconClass: 'bg-primary/10 text-primary'  },
+  { label: 'Classes',       Icon: Users,    href: '/teacher/classes',        iconClass: 'bg-success/10 text-success'  },
+  { label: 'Analytics',     Icon: BarChart2,href: '/teacher/analytics',      iconClass: 'bg-info/10 text-info'        },
+  { label: 'Notifications', Icon: Bell,     href: '/teacher/notifications',  iconClass: 'bg-warning/10 text-warning'  },
 ] as const
 
 const ACCOUNT_NAV = [
@@ -140,17 +141,16 @@ export default function TeacherLayout({ children, user }: Props) {
     </Link>
   )
 
-  // Rendered after the Classes nav item in both sidebar and drawer
-  const ClassSubItems = ({ cap }: { cap?: number }) => {
+  const SubItems = ({ baseHref, overflowHref, cap }: { baseHref: string; overflowHref: string; cap?: number }) => {
     const shown = cap ? sidebarClasses.slice(0, cap) : sidebarClasses
     return (
       <>
         {shown.map((cls) => {
-          const active = pathname.startsWith(`/teacher/classes/${cls.id}`)
+          const active = pathname.startsWith(`${baseHref}/${cls.id}`)
           return (
             <Link
               key={cls.id}
-              href={`/teacher/classes/${cls.id}`}
+              href={`${baseHref}/${cls.id}`}
               onClick={() => setDrawerOpen(false)}
               className={`flex items-center gap-2 pl-[60px] pr-3 py-1.5 rounded-xl text-xs font-medium transition-colors truncate ${
                 active ? 'text-primary bg-primary/5' : 'text-base-content/55 hover:text-base-content hover:bg-base-200'
@@ -162,7 +162,7 @@ export default function TeacherLayout({ children, user }: Props) {
         })}
         {cap && sidebarClasses.length > cap && (
           <Link
-            href="/teacher/classes"
+            href={overflowHref}
             onClick={() => setDrawerOpen(false)}
             className="pl-[60px] pr-3 py-1.5 text-xs text-base-content/40 hover:text-primary transition-colors"
           >
@@ -170,6 +170,24 @@ export default function TeacherLayout({ children, user }: Props) {
           </Link>
         )}
       </>
+    )
+  }
+
+  const AtRiskLink = () => {
+    const active = pathname.startsWith('/teacher/at-risk')
+    return (
+      <Link
+        href="/teacher/at-risk"
+        onClick={() => setDrawerOpen(false)}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors ${
+          active ? 'bg-error/10 text-error' : 'text-base-content hover:bg-base-200'
+        }`}
+      >
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${active ? 'bg-error/10 text-error' : 'bg-error/10 text-error'}`}>
+          <AlertTriangle size={18} />
+        </div>
+        <span className="text-sm font-medium">At-Risk</span>
+      </Link>
     )
   }
 
@@ -191,9 +209,11 @@ export default function TeacherLayout({ children, user }: Props) {
           {MAIN_NAV.map((item) => (
             <Fragment key={item.label}>
               <NavLink {...item} />
-              {item.label === 'Classes' && <ClassSubItems cap={5} />}
+              {item.label === 'Classes'   && <SubItems baseHref="/teacher/classes"   overflowHref="/teacher/classes"   cap={5} />}
+              {item.label === 'Analytics' && <SubItems baseHref="/teacher/analytics" overflowHref="/teacher/analytics" cap={5} />}
             </Fragment>
           ))}
+          <AtRiskLink />
           <div className="border-t border-base-200 my-2" />
           {ACCOUNT_NAV.map((item) => <NavLink key={item.label} {...item} />)}
         </div>
@@ -214,9 +234,11 @@ export default function TeacherLayout({ children, user }: Props) {
           {MAIN_NAV.map((item) => (
             <Fragment key={item.label}>
               <NavLink {...item} />
-              {item.label === 'Classes' && <ClassSubItems />}
+              {item.label === 'Classes'   && <SubItems baseHref="/teacher/classes"   overflowHref="/teacher/classes"   />}
+              {item.label === 'Analytics' && <SubItems baseHref="/teacher/analytics" overflowHref="/teacher/analytics" />}
             </Fragment>
           ))}
+          <AtRiskLink />
           <div className="border-t border-base-200 my-2" />
           {ACCOUNT_NAV.map((item) => <NavLink key={item.label} {...item} />)}
         </nav>

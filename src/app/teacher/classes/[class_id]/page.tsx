@@ -173,13 +173,19 @@ export default function ClassDetailPage() {
                 key={m.child_id}
                 className="flex items-center gap-3 p-3 rounded-xl bg-base-200"
               >
-                <div className="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center text-xs font-bold shrink-0">
-                  {m.nickname.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">{m.nickname}</p>
-                  <p className="text-xs text-base-content/50">{levelLabel(m.level)}</p>
-                </div>
+                <Link
+                  href={`/teacher/analytics/${classId}/student/${m.child_id}`}
+                  className="flex items-center gap-3 flex-1 min-w-0 group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center text-xs font-bold shrink-0">
+                    {m.nickname.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm group-hover:text-primary transition-colors">{m.nickname}</p>
+                    <p className="text-xs text-base-content/50">{levelLabel(m.level)}</p>
+                  </div>
+                  <ChevronRight size={14} className="text-base-content/20 group-hover:text-base-content/50 transition-colors shrink-0 mr-1" />
+                </Link>
                 <button
                   onClick={() => removeMember(m.child_id)}
                   disabled={removing === m.child_id}

@@ -3,8 +3,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Download } from 'lucide-react'
 import { PERIODS } from '@/types/knowly'
+
+interface ClassSummary {
+  id: number
+  name: string
+}
 
 const SUBJECTS = [
   { value: 'math',           label: 'Math' },
@@ -55,16 +60,51 @@ function subjectLabel(s: string | null | undefined) {
   return SUBJECTS.find((x) => x.value === s)?.label ?? s.replace(/_/g, ' ')
 }
 
+function levelLabel(v?: string) {
+  if (!v) return ''
+  return v === 'std_4' ? 'Standard 4' : v === 'std_5' ? 'Standard 5' : v
+}
+
+function downloadCSV(students: StudentSummary[], className: string) {
+  const headers = ['Nickname', 'Level', 'Avg Score (%)', 'Trials', 'Quests', 'At Risk']
+  const rows = students.map((s) => [
+    s.nickname ?? `Student #${s.user_id}`,
+    levelLabel(s.level),
+    s.avg_score != null ? Math.round(s.avg_score) : '',
+    s.trial_count,
+    s.quest_count,
+    s.at_risk ? 'Yes' : 'No',
+  ])
+  const csv = [headers, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `${className.replace(/\s+/g, '_')}_performance.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function ClassAnalyticsPage() {
   const router = useRouter()
   const params = useParams()
   const classId = params.class_id as string
 
-  const [period, setPeriod]   = useState('')
-  const [subject, setSubject] = useState('')
-  const [data, setData]       = useState<ClassAnalytics | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState('')
+  const [classes, setClasses]  = useState<ClassSummary[]>([])
+  const [period, setPeriod]    = useState('')
+  const [subject, setSubject]  = useState('')
+  const [data, setData]        = useState<ClassAnalytics | null>(null)
+  const [loading, setLoading]  = useState(true)
+  const [error, setError]      = useState('')
+
+  useEffect(() => {
+    fetch('/api/classes')
+      .then((r) => r.ok ? r.json() : [])
+      .then((list) => {
+        if (Array.isArray(list)) setClasses(list)
+      })
+      .catch(() => {})
+  }, [])
 
   const fetchAnalytics = useCallback(async () => {
     setLoading(true)
@@ -96,6 +136,25 @@ export default function ClassAnalyticsPage() {
         <h1 className="text-3xl font-bold">Class Analytics</h1>
         <p className="text-sm text-base-content/60">Performance overview</p>
       </div>
+
+      {/* ── Class switcher ── */}
+      {classes.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+          {classes.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => router.push(`/teacher/analytics/${c.id}`)}
+              className={`btn btn-sm shrink-0 rounded-full ${
+                String(c.id) === classId
+                  ? 'btn-primary'
+                  : 'btn-ghost border border-base-300'
+              }`}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Filters ── */}
       <div className="flex gap-2 flex-wrap">
@@ -218,6 +277,16 @@ export default function ClassAnalyticsPage() {
           <div className="flex items-center gap-3">
             <p className="font-semibold text-base">Students</p>
             <div className="flex-1 h-px bg-base-200" />
+            <button
+              onClick={() => {
+                const name = classes.find((c) => String(c.id) === classId)?.name ?? 'Class'
+                downloadCSV(data.students, name)
+              }}
+              className="btn btn-ghost btn-xs gap-1 text-base-content/50 hover:text-base-content"
+              title="Export to CSV"
+            >
+              <Download size={13} /> Export
+            </button>
           </div>
 
           {data.students.length > 0 ? (

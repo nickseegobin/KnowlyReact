@@ -53,6 +53,35 @@ const QUEST_DETAIL = {
   topic: 'Sequences', sections: [], worked_examples: [], knowledge_checks: [], gem_cost: 3, is_completed: false,
 }
 
+// Fixture with explanation_audio — mirrors the shape WP returns after clips are generated
+const QUEST_DETAIL_WITH_AUDIO = {
+  quest_id: 'q-audio',
+  module_title: 'Number Patterns',
+  subject: 'math',
+  gem_cost: 3,
+  content: {
+    sections: [
+      {
+        section_number: 1,
+        title: 'Repeating, Increasing, and Decreasing Patterns',
+        explanation: [
+          'A number pattern is a list of numbers that follow a special rule.',
+          'A repeating pattern keeps the same group of numbers appearing.',
+          'An increasing pattern gets bigger each time.',
+          'A decreasing pattern gets smaller each time.',
+        ],
+        explanation_audio: [
+          'https://knowly-polly-audio.s3.amazonaws.com/knowly/audio/q-audio/s0_p0.aaa.mp3',
+          'https://knowly-polly-audio.s3.amazonaws.com/knowly/audio/q-audio/s0_p1.bbb.mp3',
+          'https://knowly-polly-audio.s3.amazonaws.com/knowly/audio/q-audio/s0_p2.ccc.mp3',
+          null, // clip not yet generated
+        ],
+        knowledge_check: [],
+      },
+    ],
+  },
+}
+
 const QUEST_QUESTIONS = {
   questions: [
     { id: 'qq-1', sort_order: 1, difficulty: 'easy', question: 'What is a sequence?', options: { A: '...', B: '...', C: '...', D: '...' } },
@@ -168,6 +197,55 @@ describe('GET /api/quests/[quest_id]', () => {
     const body = await res.json()
     expect(res.status).toBe(404)
     expect(body.message).toBe('Quest not found.')
+  })
+
+  // ── Audio narration pass-through ─────────────────────────────────────────
+
+  it('passes explanation_audio URLs through to the client unchanged', async () => {
+    mockGetToken.mockResolvedValue('jwt')
+    mockWpFetch.mockResolvedValue(QUEST_DETAIL_WITH_AUDIO)
+    const res = await getQuest(makeGet('/api/quests/q-audio'), questParams('q-audio'))
+    const body = await res.json()
+    const section = body.content.sections[0]
+    expect(res.status).toBe(200)
+    expect(section.explanation_audio).toHaveLength(4)
+    expect(section.explanation_audio[0]).toBe('https://knowly-polly-audio.s3.amazonaws.com/knowly/audio/q-audio/s0_p0.aaa.mp3')
+    expect(section.explanation_audio[1]).toBe('https://knowly-polly-audio.s3.amazonaws.com/knowly/audio/q-audio/s0_p1.bbb.mp3')
+  })
+
+  it('preserves null entries in explanation_audio for ungenerated clips', async () => {
+    mockGetToken.mockResolvedValue('jwt')
+    mockWpFetch.mockResolvedValue(QUEST_DETAIL_WITH_AUDIO)
+    const res = await getQuest(makeGet('/api/quests/q-audio'), questParams('q-audio'))
+    const body = await res.json()
+    const audio = body.content.sections[0].explanation_audio
+    // Index 3 was null in the fixture — must stay null, not be coerced or stripped
+    expect(audio[3]).toBeNull()
+  })
+
+  it('explanation_audio is parallel to explanation — same length', async () => {
+    mockGetToken.mockResolvedValue('jwt')
+    mockWpFetch.mockResolvedValue(QUEST_DETAIL_WITH_AUDIO)
+    const res = await getQuest(makeGet('/api/quests/q-audio'), questParams('q-audio'))
+    const body = await res.json()
+    const section = body.content.sections[0]
+    expect(section.explanation_audio).toHaveLength(section.explanation.length)
+  })
+
+  it('returns section without explanation_audio when no clips exist', async () => {
+    mockGetToken.mockResolvedValue('jwt')
+    const noAudioDetail = {
+      ...QUEST_DETAIL_WITH_AUDIO,
+      content: {
+        sections: [{ ...QUEST_DETAIL_WITH_AUDIO.content.sections[0], explanation_audio: undefined }],
+      },
+    }
+    mockWpFetch.mockResolvedValue(noAudioDetail)
+    const res = await getQuest(makeGet('/api/quests/q-audio'), questParams('q-audio'))
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    // No explanation_audio key — player must degrade gracefully
+    expect(body.content.sections[0].explanation_audio).toBeUndefined()
   })
 })
 

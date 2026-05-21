@@ -3,6 +3,7 @@
 import { use, useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { Volume2, VolumeX } from 'lucide-react'
 import QuestionRenderer from '@/components/QuestionRenderer'
 import { haptic, HAPTIC_CORRECT, HAPTIC_WRONG, HAPTIC_COMPLETE, HAPTIC_SELECT } from '@/lib/haptic'
 import { soundCorrect, soundWrong, soundComplete, soundSelect } from '@/lib/sound'
@@ -32,6 +33,7 @@ interface Section {
   title: string
   content?: string
   explanation?: string[]
+  explanation_audio?: (string | null)[]
   knowledge_check?: KnowledgeCheck[]
   worked_examples?: WorkedExample[]
   objectives_covered?: string[]
@@ -119,6 +121,11 @@ export default function LessonDetailPage({
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [shaking, setShaking] = useState(false)
 
+  // ── Audio narration state ─────────────────────────────────────────────────
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+
   // ── Load lesson ───────────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
@@ -149,6 +156,18 @@ export default function LessonDetailPage({
   const isLastPara = paraIdx >= (currentSection?.explanation?.length ?? 1) - 1
   const currentCheck = currentSection?.knowledge_check?.[checkIdx]
   const totalSections = sections.length
+
+  // ── Audio narration effect ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!audioRef.current) return
+    audioRef.current.pause()
+    if (phase !== 'lesson') return
+    const url = currentSection?.explanation_audio?.[paraIdx] ?? null
+    if (!url || isMuted) return
+    audioRef.current.src = url
+    audioRef.current.load()
+    audioRef.current.play().catch(() => {})
+  }, [phase, sections, sectionIdx, paraIdx, isMuted]) // sections ensures effect re-fires after load
 
   // ── Gamification helpers ──────────────────────────────────────────────────
 
@@ -458,6 +477,14 @@ export default function LessonDetailPage({
     const showProgress = totalSections > 1 && singleSection === null
     return (
       <div key={`lesson-${sectionIdx}`} className="flex flex-col gap-4 min-h-[calc(100vh-8rem)] animate-fade-in-up">
+        <audio
+          ref={audioRef}
+          preload="none"
+          className="hidden"
+          onPlay={() => setIsPlaying(true)}
+          onEnded={() => setIsPlaying(false)}
+          onPause={() => setIsPlaying(false)}
+        />
         {ComboToast}
 
         {showProgress && (
@@ -482,15 +509,35 @@ export default function LessonDetailPage({
           <h2 className="text-xl font-bold mt-0.5">{currentSection?.title}</h2>
         </div>
 
-        <div className="rounded-2xl bg-base-200 p-8 shadow-sm min-h-[32vh] flex flex-col items-center justify-center gap-3">
+        <div className="relative rounded-2xl bg-base-200 p-8 shadow-sm min-h-[32vh] flex flex-col items-center justify-center gap-3">
+          {/* Mute toggle — shown whenever the section has an audio array */}
+          {(currentSection?.explanation_audio?.length ?? 0) > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsMuted((m) => !m)}
+              className="absolute top-3 right-3 p-1.5 rounded-full text-base-content/30 hover:text-base-content/60 transition-colors"
+              aria-label={isMuted ? 'Unmute narration' : 'Mute narration'}
+            >
+              {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+            </button>
+          )}
+
           <p key={`para-${paraIdx}`} className="text-base leading-relaxed text-base-content max-w-xl w-full">
             <QuestionRenderer text={currentPara} splitAnimate />
           </p>
-          {(currentSection?.explanation?.length ?? 0) > 1 && (
-            <p className="text-xs text-base-content/40 self-end">
-              {paraIdx + 1} / {currentSection?.explanation?.length}
-            </p>
-          )}
+
+          <div className="flex items-center justify-between w-full max-w-xl self-end">
+            {isPlaying && !isMuted ? (
+              <span className="text-xs text-base-content/40 flex items-center gap-1">
+                <Volume2 size={11} /> Narrating…
+              </span>
+            ) : <span />}
+            {(currentSection?.explanation?.length ?? 0) > 1 && (
+              <p className="text-xs text-base-content/40">
+                {paraIdx + 1} / {currentSection?.explanation?.length}
+              </p>
+            )}
+          </div>
         </div>
 
         {examples.length > 0 && (

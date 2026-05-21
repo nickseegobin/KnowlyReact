@@ -7,6 +7,8 @@ import Breadcrumb from '@/components/child/Breadcrumb'
 import QuestionRenderer from '@/components/QuestionRenderer'
 import { haptic, HAPTIC_SELECT } from '@/lib/haptic'
 import { soundSelect } from '@/lib/sound'
+import { useQuizAudio } from '@/lib/useQuizAudio'
+import { playVictoryFanfare } from '@/lib/victoryAudio'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -97,6 +99,9 @@ export default function TrialPage({
   const timingsRef = useRef<Record<string, number>>({})
   const currentIdxRef = useRef(0)
   const answerCountRef = useRef(0)
+  const questionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const { playQuestion } = useQuizAudio()
 
   useEffect(() => { sessionRef.current = session }, [session])
   useEffect(() => { answersRef.current = answers }, [answers])
@@ -167,6 +172,18 @@ export default function TrialPage({
   const questions = session?.package.questions ?? []
   const total = questions.length
   const currentQ = questions[currentIdx]
+
+  // Fire mystery chord after the question text animation completes
+  useEffect(() => {
+    if (questionTimerRef.current) clearTimeout(questionTimerRef.current)
+    if (phase !== 'exam' || !currentQ) return
+    const text = currentQ.question ?? currentQ.question_text ?? ''
+    const wordCount = text.trim().split(/\s+/).length
+    const delay = Math.round((wordCount * 0.028 + 0.35) * 1000)
+    questionTimerRef.current = setTimeout(() => playQuestion(currentIdx), delay)
+    return () => { if (questionTimerRef.current) clearTimeout(questionTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, currentIdx])
 
   // ── Topic selection helpers ──────────────────────────────────────────────────
   function toggleModule(moduleNumber: number) {
@@ -301,6 +318,7 @@ export default function TrialPage({
       const data = await res.json()
       if (!res.ok) { setError('Submission failed'); return }
       sessionStorage.setItem('trial_result', JSON.stringify({ ...data, subject, difficulty }))
+      playVictoryFanfare()
       router.push(`/child/trials/${encodedSubject}/${difficulty}/results`)
     } catch {
       setError('Failed to submit. Please try again.')

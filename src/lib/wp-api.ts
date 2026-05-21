@@ -38,12 +38,17 @@ export async function wpFetch<T>(
     cache: 'no-store',
   })
 
-  const json = await res.json()
+  let json: Record<string, unknown>
+  try {
+    json = await res.json()
+  } catch {
+    throw new WPApiError('parse_error', `WP returned non-JSON response (HTTP ${res.status})`, res.status)
+  }
 
   if (!res.ok) {
     throw new WPApiError(
-      json?.code ?? 'unknown_error',
-      json?.message ?? 'An unexpected error occurred',
+      (json?.code as string) ?? 'unknown_error',
+      (json?.message as string) ?? 'An unexpected error occurred',
       res.status,
     )
   }

@@ -22,19 +22,19 @@ function playTone(
   }
 }
 
+// G5 — 5th of C major, reinforces the Cadd9 resolution chord from useQuizAudio
 export function soundCorrect() {
-  playTone(880, 0.15)
+  playTone(784, 0.12, 'sine', 0.14)
 }
 
+// Bb4 — tritone within Edim, harmonically supports the wrong chord from useQuizAudio
 export function soundWrong() {
-  playTone(200, 0.28, 'sawtooth', 0.18)
+  playTone(466, 0.18, 'sine', 0.11)
 }
 
 export function soundSelect() {
   playTone(520, 0.07, 'sine', 0.1)
 }
 
-export function soundComplete() {
-  const notes = [523, 659, 784, 1047]
-  notes.forEach((f, i) => setTimeout(() => playTone(f, 0.35, 'sine', 0.2), i * 110))
-}
+// Replaced by playVictoryFanfare() — kept as a no-op so import sites don't break
+export function soundComplete() {}  // eslint-disable-line @typescript-eslint/no-empty-function

@@ -6,9 +6,11 @@ import Link from 'next/link'
 import { Volume2, VolumeX, RotateCcw } from 'lucide-react'
 import QuestionRenderer from '@/components/QuestionRenderer'
 import { useLessonAudio } from '@/lib/useLessonAudio'
+import { useQuizAudio } from '@/lib/useQuizAudio'
 import { haptic, HAPTIC_CORRECT, HAPTIC_WRONG, HAPTIC_COMPLETE, HAPTIC_SELECT } from '@/lib/haptic'
 import { soundCorrect, soundWrong, soundComplete, soundSelect } from '@/lib/sound'
 import { confettiCompletion } from '@/lib/confetti'
+import { playVictoryFanfare } from '@/lib/victoryAudio'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -135,6 +137,8 @@ export default function QuestDetailPage({
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
+  const [narrationDone, setNarrationDone] = useState(true)
+  const chordFiredRef = useRef(false)
 
   // ── Load quest ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -169,17 +173,39 @@ export default function QuestDetailPage({
 
   // ── Slide chord ───────────────────────────────────────────────────────────
   const { playSlideChord } = useLessonAudio(currentSection?.explanation?.length ?? 0)
+  const { playQuestion, playCorrect, playWrong } = useQuizAudio()
+
+  // Fire mystery chord after the question text animation finishes.
+  const questionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (questionTimerRef.current) clearTimeout(questionTimerRef.current)
+    if (phase !== 'quiz' && phase !== 'review') return
+
+    const text  = phase === 'quiz' ? currentCheck?.question : wrongPool[reviewIdx]?.check?.question
+    const index = phase === 'quiz' ? checkIdx : reviewIdx
+    if (!text) return
+
+    // Standard splitAnimate stagger: 28ms/word + 200ms word duration + 150ms buffer
+    const wordCount = text.trim().split(/\s+/).length
+    const delay = Math.round((wordCount * 0.028 + 0.35) * 1000)
+    questionTimerRef.current = setTimeout(() => playQuestion(index), delay)
+
+    return () => { if (questionTimerRef.current) clearTimeout(questionTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, checkIdx, reviewIdx])
 
   // ── Audio narration effect ────────────────────────────────────────────────
   useEffect(() => {
     if (!audioRef.current) return
     audioRef.current.pause()
-    if (phase !== 'lesson') return
+    chordFiredRef.current = false
+    if (phase !== 'lesson') { setNarrationDone(true); return }
     const url = currentSection?.explanation_audio?.[paraIdx] ?? null
-    if (!url || isMuted) return
+    if (!url || isMuted) { setNarrationDone(true); return }
+    setNarrationDone(false)
     audioRef.current.src = url
     audioRef.current.load()
-    audioRef.current.play().catch(() => {})
+    audioRef.current.play().catch(() => setNarrationDone(true))
   }, [phase, sections, sectionIdx, paraIdx, isMuted]) // sections ensures effect re-fires after load
 
   // ── Gamification helpers ──────────────────────────────────────────────────
@@ -282,8 +308,10 @@ export default function QuestDetailPage({
     setIsCorrect(correct)
     if (correct) {
       handleCorrect()
+      playCorrect()
     } else {
       handleWrong()
+      playWrong(checkIdx)
       setWrongPool((pool) => [
         ...pool,
         { sectionTitle: currentSection.title, check: currentCheck, attempts: 1 },
@@ -326,8 +354,8 @@ export default function QuestDetailPage({
     const correct = ans === item.check.correct_answer
     setReviewSelected(ans)
     setReviewCorrect(correct)
-    if (correct) handleCorrect()
-    else handleWrong()
+    if (correct) { handleCorrect(); playCorrect() }
+    else { handleWrong(); playWrong(reviewIdx) }
     setPhase('review_feedback')
   }
 
@@ -352,7 +380,7 @@ export default function QuestDetailPage({
 
   async function completeQuest() {
     setPhase('completing')
-    soundComplete()
+    playVictoryFanfare()
     haptic(HAPTIC_COMPLETE)
     confettiCompletion()
     try {
@@ -586,8 +614,18 @@ export default function QuestDetailPage({
           preload="none"
           className="hidden"
           onPlay={() => setIsPlaying(true)}
-          onEnded={() => setIsPlaying(false)}
+          onEnded={() => { setIsPlaying(false); setNarrationDone(true) }}
           onPause={() => setIsPlaying(false)}
+          onError={() => setNarrationDone(true)}
+          onTimeUpdate={() => {
+            if (chordFiredRef.current) return
+            const audio = audioRef.current
+            if (!audio?.duration || audio.duration === Infinity) return
+            if (audio.duration - audio.currentTime <= 0.65) {
+              chordFiredRef.current = true
+              playSlideChord(paraIdx)
+            }
+          }}
         />
         {ComboToast}
 
@@ -628,7 +666,7 @@ export default function QuestDetailPage({
           )}
 
           <p key={`para-${paraIdx}`} className="text-base leading-relaxed text-base-content max-w-xl w-full">
-            <QuestionRenderer text={currentPara} splitAnimate />
+            <QuestionRenderer text={currentPara} splitAnimate narrate />
           </p>
 
           <div className="flex items-center justify-between w-full max-w-xl self-end">
@@ -690,7 +728,8 @@ export default function QuestDetailPage({
           )}
           <button
             className="btn btn-primary flex-1"
-            onClick={() => { playSlideChord(paraIdx); advanceLesson() }}
+            onClick={advanceLesson}
+            disabled={!narrationDone}
           >
             {isLastPara ? 'Check Your Understanding →' : 'Next →'}
           </button>

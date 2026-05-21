@@ -5,10 +5,11 @@ import { motion, useReducedMotion, type Variants } from 'framer-motion'
 
 // ── Animation variants ─────────────────────────────────────────────────────────
 
-const containerVariants: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.028 } },
+function makeContainerVariants(stagger: number): Variants {
+  return { hidden: {}, visible: { transition: { staggerChildren: stagger } } }
 }
+
+const DEFAULT_STAGGER = 0.028
 
 // Word-by-word: fade up from y:10
 const wordVariants: Variants = {
@@ -170,9 +171,15 @@ interface Props {
    * Use on question text only — do NOT set on answer option labels.
    */
   splitAnimate?: boolean
+  /**
+   * When true (explanation pages only), scales the stagger so the full text
+   * animates in 2–3 seconds based on length — slower than the default 28ms
+   * stagger but not audio-synced.
+   */
+  narrate?: boolean
 }
 
-export default function QuestionRenderer({ text, className = '', splitAnimate = false }: Props) {
+export default function QuestionRenderer({ text, className = '', splitAnimate = false, narrate = false }: Props) {
   const prefersReducedMotion = useReducedMotion()
 
   if (!text) return null
@@ -194,10 +201,19 @@ export default function QuestionRenderer({ text, className = '', splitAnimate = 
 
   // ── Split animate: word-by-word stagger; [emphasize] pulses after ─────────
   if (splitAnimate) {
+    const wordCount = tokens.filter(t => t.type !== 'break' && t.type !== 'space').length
+    let stagger = DEFAULT_STAGGER
+    if (narrate && wordCount > 1) {
+      // Scale target from 2s (≤20 words) to 3s (≥80 words), then derive stagger.
+      const clamped = Math.min(Math.max(wordCount, 20), 80)
+      const target  = 2.0 + ((clamped - 20) / 60) * 1.0
+      stagger = Math.max(0.020, (target - 0.2) / (wordCount - 1))
+    }
+
     return (
       <motion.span
         className={className}
-        variants={containerVariants}
+        variants={makeContainerVariants(stagger)}
         initial="hidden"
         animate="visible"
       >

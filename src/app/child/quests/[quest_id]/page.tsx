@@ -3,8 +3,9 @@
 import { use, useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Volume2, VolumeX } from 'lucide-react'
+import { Volume2, VolumeX, RotateCcw } from 'lucide-react'
 import QuestionRenderer from '@/components/QuestionRenderer'
+import { useLessonAudio } from '@/lib/useLessonAudio'
 import { haptic, HAPTIC_CORRECT, HAPTIC_WRONG, HAPTIC_COMPLETE, HAPTIC_SELECT } from '@/lib/haptic'
 import { soundCorrect, soundWrong, soundComplete, soundSelect } from '@/lib/sound'
 import { confettiCompletion } from '@/lib/confetti'
@@ -165,6 +166,9 @@ export default function QuestDetailPage({
   const isLastPara = paraIdx >= (currentSection?.explanation?.length ?? 1) - 1
   const currentCheck = currentSection?.knowledge_check?.[checkIdx]
   const totalSections = sections.length
+
+  // ── Slide chord ───────────────────────────────────────────────────────────
+  const { playSlideChord } = useLessonAudio(currentSection?.explanation?.length ?? 0)
 
   // ── Audio narration effect ────────────────────────────────────────────────
   useEffect(() => {
@@ -407,6 +411,16 @@ export default function QuestDetailPage({
     }
   }
 
+  // ── Audio helpers ─────────────────────────────────────────────────────────
+  function replayAudio() {
+    const url = currentSection?.explanation_audio?.[paraIdx] ?? null
+    if (!url || !audioRef.current || isMuted) return
+    audioRef.current.pause()
+    audioRef.current.src = url
+    audioRef.current.load()
+    audioRef.current.play().catch(() => {})
+  }
+
   // ── Combo toast ───────────────────────────────────────────────────────────
   const ComboToast = comboToast ? (
     <div className="fixed top-20 left-0 right-0 z-50 flex justify-center pointer-events-none">
@@ -622,6 +636,15 @@ export default function QuestDetailPage({
               <span className="text-xs text-base-content/40 flex items-center gap-1">
                 <Volume2 size={11} /> Narrating…
               </span>
+            ) : (currentSection?.explanation_audio?.[paraIdx] && !isMuted) ? (
+              <button
+                type="button"
+                onClick={replayAudio}
+                className="flex items-center gap-1 text-xs text-base-content/40 hover:text-base-content/70 transition-colors"
+                aria-label="Replay narration"
+              >
+                <RotateCcw size={11} /> Replay
+              </button>
             ) : <span />}
             {(currentSection?.explanation?.length ?? 0) > 1 && (
               <p className="text-xs text-base-content/40">
@@ -656,9 +679,22 @@ export default function QuestDetailPage({
           </div>
         )}
 
-        <button className="btn btn-primary w-full" onClick={advanceLesson}>
-          {isLastPara ? 'Check Your Understanding →' : 'Next →'}
-        </button>
+        <div className="flex gap-3">
+          {paraIdx > 0 && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => setParaIdx((p) => p - 1)}
+            >
+              ← Back
+            </button>
+          )}
+          <button
+            className="btn btn-primary flex-1"
+            onClick={() => { playSlideChord(paraIdx); advanceLesson() }}
+          >
+            {isLastPara ? 'Check Your Understanding →' : 'Next →'}
+          </button>
+        </div>
       </div>
     )
   }

@@ -102,6 +102,10 @@ export default function QuestDetailPage({
   // so that Railway can write an exam_sessions row and update progression status.
   const topicParam = searchParams.get('topic') ?? ''
 
+  // ?subject= is passed by the quests list so we can return to the correct tab.
+  // Falls back to quest.subject once the quest loads.
+  const subjectParam = searchParams.get('subject') ?? ''
+
   // ── Core state ────────────────────────────────────────────────────────────
   const [phase, setPhase] = useState<Phase>('loading')
   const [quest, setQuest] = useState<QuestData | null>(null)
@@ -432,7 +436,8 @@ export default function QuestDetailPage({
           is_first_completion: data.is_first_completion ?? false,
         })
       )
-      router.push(`/child/quests/${quest_id}/results`)
+      const subject = quest?.subject || subjectParam
+      router.push(`/child/quests/${quest_id}/results?subject=${subject}`)
     } catch {
       setError('Could not save progress. Please try again.')
       setPhase('quiz')
@@ -478,7 +483,7 @@ export default function QuestDetailPage({
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
         <div className="text-5xl">😕</div>
         <p className="text-base-content/60">{error || 'Something went wrong.'}</p>
-        <Link href="/child/quests" className="btn btn-primary btn-sm">Back to Quests</Link>
+        <Link href={`/child/quests${subjectParam ? `?subject=${subjectParam}` : ''}`} className="btn btn-primary btn-sm">Back to Quests</Link>
       </div>
     )
   }
@@ -490,7 +495,7 @@ export default function QuestDetailPage({
 
     return (
       <div className="flex flex-col gap-5 max-w-lg animate-fade-in-up">
-        <Link href="/child/quests" className="btn btn-ghost btn-sm w-fit gap-1 -ml-2">
+        <Link href={`/child/quests${(quest?.subject || subjectParam) ? `?subject=${quest?.subject || subjectParam}` : ''}`} className="btn btn-ghost btn-sm w-fit gap-1 -ml-2">
           ← Quests
         </Link>
 

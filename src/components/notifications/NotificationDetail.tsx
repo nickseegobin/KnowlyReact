@@ -39,6 +39,7 @@ export default function NotificationDetail({ notificationId, canRespond = false,
   const [error, setError] = useState('')
   const [responding, setResponding] = useState<'accepted' | 'declined' | null>(null)
   const [responseError, setResponseError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   const fetch_ = useCallback(async () => {
     setLoading(true)
@@ -64,6 +65,17 @@ export default function NotificationDetail({ notificationId, canRespond = false,
   }, [notificationId, onRead])
 
   useEffect(() => { fetch_() }, [fetch_])
+
+  async function deleteNotif() {
+    if (!notif) return
+    setDeleting(true)
+    try {
+      await fetch(`/api/notifications/${notif.id}`, { method: 'DELETE' })
+      onRead?.()
+      router.back()
+    } catch { /* ignore */ }
+    finally { setDeleting(false) }
+  }
 
   async function respond(response: 'accepted' | 'declined') {
     if (!notif) return
@@ -125,6 +137,14 @@ export default function NotificationDetail({ notificationId, canRespond = false,
         {!notif.is_read && (
           <span className="badge badge-sm badge-primary">New</span>
         )}
+        <button
+          onClick={deleteNotif}
+          disabled={deleting}
+          className="btn btn-ghost btn-sm text-error"
+          title="Delete notification"
+        >
+          {deleting ? <span className="loading loading-spinner loading-xs" /> : 'Delete'}
+        </button>
       </div>
 
       {/* ── Message ── */}

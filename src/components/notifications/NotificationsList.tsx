@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import type { KnowlyNotification } from '@/types/knowly'
 
@@ -36,11 +36,12 @@ export default function NotificationsList({ detailBasePath, onAllRead }: Props) 
   const [loading, setLoading] = useState(true)
   const [showAll, setShowAll] = useState(false)
   const [markingAll, setMarkingAll] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true)
     try {
-      const unreadOnly = showAll ? 'false' : 'false' // always fetch all for the page view
+      const unreadOnly = showAll ? 'false' : 'true'
       const res = await fetch(`/api/notifications?unread_only=${unreadOnly}`)
       if (res.ok) {
         const data = await res.json()
@@ -60,6 +61,17 @@ export default function NotificationsList({ detailBasePath, onAllRead }: Props) 
       onAllRead?.()
     } catch { /* ignore */ }
     finally { setMarkingAll(false) }
+  }
+
+  async function deleteNotification(e: MouseEvent, id: number) {
+    e.stopPropagation()
+    setDeletingId(id)
+    try {
+      await fetch(`/api/notifications/${id}`, { method: 'DELETE' })
+      setNotifications((prev) => prev.filter((n) => n.id !== id))
+      onAllRead?.()
+    } catch { /* ignore */ }
+    finally { setDeletingId(null) }
   }
 
   function openNotification(n: KnowlyNotification) {
@@ -158,7 +170,19 @@ export default function NotificationsList({ detailBasePath, onAllRead }: Props) 
                 )}
               </div>
 
-              <span className="text-base-content/30 mt-1">›</span>
+              <div className="flex items-center gap-1 shrink-0">
+                <span className="text-base-content/30 mt-1">›</span>
+                <button
+                  onClick={(e) => deleteNotification(e, n.id)}
+                  disabled={deletingId === n.id}
+                  className="btn btn-ghost btn-xs text-base-content/30 hover:text-error p-1"
+                  title="Delete notification"
+                >
+                  {deletingId === n.id
+                    ? <span className="loading loading-spinner loading-xs" />
+                    : '✕'}
+                </button>
+              </div>
             </button>
           ))}
         </div>

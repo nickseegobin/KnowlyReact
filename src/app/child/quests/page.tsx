@@ -240,7 +240,7 @@ export default async function QuestsPage({
           {/* Subject banner */}
           {selectedSubject && (
             <div className="flex items-center gap-3">
-              <p className="font-semibold text-base">{SUBJECT_DISPLAY[selectedSubject]}</p>
+              <p className="text-xl font-bold">{SUBJECT_DISPLAY[selectedSubject]}</p>
               <div className="flex-1 h-px bg-base-200" />
             </div>
           )}
@@ -283,7 +283,7 @@ export default async function QuestsPage({
                         const style = topicStyle(topic.displayStatus)
                         const isLocked = topic.displayStatus === 'locked'
                         const href = (!isLocked && questId)
-                          ? `/child/quests/${questId}?section=${topic.sectionIdx}&topic=${encodeURIComponent(topic.topic)}`
+                          ? `/child/quests/${questId}?section=${topic.sectionIdx}&topic=${encodeURIComponent(topic.topic)}&subject=${selectedSubject}`
                           : null
 
                         const row = (

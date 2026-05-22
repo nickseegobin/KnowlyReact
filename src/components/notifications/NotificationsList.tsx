@@ -136,12 +136,12 @@ export default function NotificationsList({ detailBasePath, onAllRead }: Props) 
       ) : (
         <div className="flex flex-col gap-2">
           {displayed.map((n) => (
-            <button
+            <div
               key={n.id}
-              onClick={() => openNotification(n)}
-              className={`rounded-2xl p-4 text-left transition-colors flex items-start gap-3 ${
+              className={`rounded-2xl p-4 text-left transition-colors flex items-start gap-3 cursor-pointer ${
                 n.is_read ? 'bg-base-200 hover:bg-base-300' : 'bg-base-200 border border-primary/30 hover:bg-base-300'
               }`}
+              onClick={() => openNotification(n)}
             >
               {/* Unread dot */}
               <div className="mt-1.5 shrink-0">
@@ -183,7 +183,7 @@ export default function NotificationsList({ detailBasePath, onAllRead }: Props) 
                     : '✕'}
                 </button>
               </div>
-            </button>
+            </div>
           ))}
         </div>
       )}

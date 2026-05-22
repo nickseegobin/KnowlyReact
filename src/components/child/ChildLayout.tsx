@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import type { AuthUser } from '@/types/knowly'
 import { useUnreadCount } from '@/hooks/useUnreadCount'
+import { unlockAudio } from '@/lib/audioUnlock'
 
 // Sidebar nav definition
 const STUDY_NAV = [
@@ -53,6 +54,15 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
         setLiveBlue(data.balance ?? data.blue_gem_balance ?? 0)
       }
     } catch { /* keep current value */ }
+  }, [])
+
+  useEffect(() => {
+    document.addEventListener('touchstart', unlockAudio, { once: true, passive: true })
+    document.addEventListener('click',      unlockAudio, { once: true })
+    return () => {
+      document.removeEventListener('touchstart', unlockAudio)
+      document.removeEventListener('click',      unlockAudio)
+    }
   }, [])
 
   useEffect(() => { refreshGems() }, [pathname, refreshGems])

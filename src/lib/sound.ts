@@ -1,3 +1,5 @@
+import { getSharedAudioContext } from './audioUnlock'
+
 function playTone(
   freq: number,
   duration: number,
@@ -6,7 +8,8 @@ function playTone(
 ) {
   if (typeof window === 'undefined') return
   try {
-    const ctx = new AudioContext()
+    const ctx = getSharedAudioContext()
+    if (!ctx || ctx.state === 'suspended') return
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.connect(gain)

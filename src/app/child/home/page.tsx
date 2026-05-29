@@ -5,6 +5,7 @@ import { getTokenFromCookie } from '@/lib/cookies'
 import { wpFetch } from '@/lib/wp-api'
 import type { AuthUser } from '@/types/knowly'
 import RotatingCTA from '@/components/child/RotatingCTA'
+import ChildActivityStats from '@/components/child/ChildActivityStats'
 
 interface ProgressionTopic {
   topic: string
@@ -16,9 +17,6 @@ interface ProgressionData {
   subjects: Record<string, { topics: ProgressionTopic[] }>
 }
 
-interface ChildAnalytics {
-  weekly_trials: number
-}
 
 const SUBJECT_LABEL: Record<string, string> = {
   math:           'Mathematics',
@@ -52,17 +50,15 @@ export default async function ChildHomePage() {
   const progressionQs = new URLSearchParams({ level, curriculum: 'tt_primary' })
   if (period) progressionQs.set('period', period)
 
-  const [analyticsResult, gemsResult, progressionResult] = await Promise.allSettled([
-    wpFetch<ChildAnalytics>('/analytics/child-self?period=week', 'GET', undefined, token),
+  const [gemsResult, progressionResult] = await Promise.allSettled([
     wpFetch<{ balance: number }>('/gems/balance', 'GET', undefined, token),
     level
       ? wpFetch<ProgressionData>(`/child/progression?${progressionQs}`, 'GET', undefined, token)
       : Promise.reject('no level'),
   ])
 
-  const weeklyTrials = analyticsResult.status === 'fulfilled' ? (analyticsResult.value?.weekly_trials ?? 0) : 0
-  const gems         = gemsResult.status === 'fulfilled'      ? (gemsResult.value?.balance ?? 0)            : 0
-  const progression  = progressionResult.status === 'fulfilled' ? progressionResult.value : null
+  const gems        = gemsResult.status === 'fulfilled' ? (gemsResult.value?.balance ?? 0) : 0
+  const progression = progressionResult.status === 'fulfilled' ? progressionResult.value  : null
 
   // Find first in-progress topic across subjects
   let continueSubject = ''
@@ -91,11 +87,8 @@ export default async function ChildHomePage() {
             <Gem size={13} className="text-info" />
             {gems}
           </span>
-          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-base-200 text-sm font-medium">
-            <TrendingUp size={13} className="text-success" />
-            {weeklyTrials} {weeklyTrials === 1 ? 'trial' : 'trials'} this week
-          </span>
         </div>
+        <ChildActivityStats />
       </div>
 
       {/* ── Rotating CTA ── */}
@@ -140,7 +133,7 @@ export default async function ChildHomePage() {
           {([
             { label: 'Leaderboard', Icon: Trophy,     href: '/child/leaderboard' },
             { label: 'My Progress', Icon: TrendingUp, href: '/child/my-progress' },
-            { label: 'Badges',      Icon: Award,      href: '/badges' },
+            { label: 'Badges',      Icon: Award,      href: '/child/badges' },
           ] as const).map(({ label, Icon, href }) => (
             <Link
               key={label}

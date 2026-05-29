@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AvatarPicker from '@/components/AvatarPicker'
 import { LEVELS, PERIODS } from '@/types/knowly'
 
-export default function AddChildPage() {
-  const router = useRouter()
+function AddChildForm() {
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const isSignup     = searchParams.get('signup') === '1'
   const [avatarIndex, setAvatarIndex] = useState<number>(1)
   const [form, setForm] = useState({
     nickname: '',
@@ -86,7 +88,7 @@ export default function AddChildPage() {
     <main className="min-h-screen flex items-center justify-center bg-base-100 px-4 py-12">
       <div className="w-full max-w-sm flex flex-col gap-6">
         <div>
-          <h1 className="text-3xl font-bold">Add Child</h1>
+          <h1 className="text-3xl font-bold">{isSignup ? 'Add Your First Child' : 'Add Child'}</h1>
           <p className="text-base-content/60 mt-1 text-sm">Create a student account for your child</p>
         </div>
 
@@ -209,5 +211,17 @@ export default function AddChildPage() {
         </form>
       </div>
     </main>
+  )
+}
+
+export default function AddChildPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen flex items-center justify-center bg-base-100 px-4 py-12">
+        <span className="loading loading-spinner loading-lg" />
+      </main>
+    }>
+      <AddChildForm />
+    </Suspense>
   )
 }

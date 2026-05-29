@@ -36,8 +36,10 @@ export default function TeacherLayout({ children, user }: Props) {
   const avatarRef = useRef<HTMLDivElement>(null)
   const { unread, refresh: refreshCount } = useUnreadCount()
 
-  const [liveRed,       setLiveRed]       = useState(user.red_gem_balance)
-  const [sidebarClasses, setSidebarClasses] = useState<ClassEntry[]>([])
+  const [liveRed,         setLiveRed]         = useState(user.red_gem_balance)
+  const [liveAvatarIndex, setLiveAvatarIndex] = useState(user.avatar_index ?? 1)
+  const [liveDisplayName, setLiveDisplayName] = useState(user.display_name)
+  const [sidebarClasses,  setSidebarClasses]  = useState<ClassEntry[]>([])
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -65,6 +67,25 @@ export default function TeacherLayout({ children, user }: Props) {
     return () => window.removeEventListener('knowly:red-gem-update', onGemUpdate)
   }, [])
 
+  // Sync avatar/name from props — handles live preview when settings page passes updated props
+  useEffect(() => {
+    setLiveAvatarIndex(user.avatar_index ?? 1)
+  }, [user.avatar_index])
+
+  useEffect(() => {
+    setLiveDisplayName(user.display_name)
+  }, [user.display_name])
+
+  useEffect(() => {
+    function onProfileUpdate(e: Event) {
+      const detail = (e as CustomEvent<{ avatar_index?: number; display_name?: string }>).detail
+      if (typeof detail?.avatar_index === 'number') setLiveAvatarIndex(detail.avatar_index)
+      if (typeof detail?.display_name === 'string') setLiveDisplayName(detail.display_name)
+    }
+    window.addEventListener('knowly:profile-update', onProfileUpdate)
+    return () => window.removeEventListener('knowly:profile-update', onProfileUpdate)
+  }, [])
+
   function isActive(href: string) {
     if (href === '/teacher/home') return pathname === '/teacher/home'
     return pathname.startsWith(href)
@@ -82,8 +103,8 @@ export default function TeacherLayout({ children, user }: Props) {
         className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-base-300 focus:outline-none"
       >
         <Image
-          src={`/avatars/adults/avatar-${user.avatar_index ?? 1}.png`}
-          alt={user.display_name}
+          src={`/avatars/adults/avatar-${liveAvatarIndex}.png`}
+          alt={liveDisplayName}
           width={36}
           height={36}
           className="object-cover w-full h-full"
@@ -98,7 +119,7 @@ export default function TeacherLayout({ children, user }: Props) {
       {avatarMenuOpen && (
         <div className="absolute right-0 top-11 w-56 bg-base-100 rounded-box shadow-xl border border-base-200 z-50 py-2">
           <div className="px-4 py-2 border-b border-base-200">
-            <p className="font-semibold text-sm">{user.display_name}</p>
+            <p className="font-semibold text-sm">{liveDisplayName}</p>
             <p className="text-xs text-base-content/50">
               {user.school_name ? `${user.school_name} · ` : ''}Teacher
             </p>

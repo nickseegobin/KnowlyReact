@@ -25,7 +25,7 @@ const STUDY_NAV = [
 const TRACK_NAV = [
   { label: 'Leaderboard', Icon: Trophy,     href: '/child/leaderboard', iconClass: 'bg-primary/10 text-primary' },
   { label: 'Progress',    Icon: TrendingUp, href: '/child/my-progress', iconClass: 'bg-info/10 text-info' },
-  { label: 'Badges',      Icon: Award,      href: '/badges',            iconClass: 'bg-warning/10 text-warning' },
+  { label: 'Badges',      Icon: Award,      href: '/child/badges',      iconClass: 'bg-warning/10 text-warning' },
   { label: 'News',        Icon: Newspaper,  href: '/child/news',        iconClass: 'bg-base-200 text-base-content/50' },
 ] as const
 
@@ -95,9 +95,19 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
   }, [])
 
   const activeChild = user.children?.find((c) => c.child_id === user.active_child_id) ?? user.children?.[0]
-  const avatarIndex = activeChild?.avatar_index ?? 1
-  const displayName = activeChild?.display_name ?? user.display_name
-  const nickname    = activeChild?.nickname ?? ''
+  const [liveAvatarIndex, setLiveAvatarIndex] = useState(activeChild?.avatar_index ?? 1)
+  const [liveDisplayName, setLiveDisplayName] = useState(activeChild?.display_name ?? user.display_name)
+  const nickname = activeChild?.nickname ?? ''
+
+  useEffect(() => {
+    function onProfileUpdate(e: Event) {
+      const detail = (e as CustomEvent<{ avatar_index?: number; display_name?: string }>).detail
+      if (typeof detail?.avatar_index === 'number') setLiveAvatarIndex(detail.avatar_index)
+      if (typeof detail?.display_name === 'string')  setLiveDisplayName(detail.display_name)
+    }
+    window.addEventListener('knowly:profile-update', onProfileUpdate)
+    return () => window.removeEventListener('knowly:profile-update', onProfileUpdate)
+  }, [])
 
   function isActive(href: string) {
     if (href === '/child/home') return pathname === '/child/home'
@@ -116,8 +126,8 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
         className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-base-300 focus:outline-none"
       >
         <Image
-          src={`/avatars/children/avatar-${avatarIndex}.png`}
-          alt={displayName}
+          src={`/avatars/children/avatar-${liveAvatarIndex}.png`}
+          alt={liveDisplayName}
           width={36}
           height={36}
           className="object-cover w-full h-full"
@@ -132,7 +142,7 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
       {avatarMenuOpen && (
         <div className="absolute right-0 top-11 w-56 bg-base-100 rounded-box shadow-xl border border-base-200 z-50 py-2">
           <div className="px-4 py-2 border-b border-base-200">
-            <p className="font-semibold text-sm">{displayName}</p>
+            <p className="font-semibold text-sm">{liveDisplayName}</p>
             {nickname && <p className="text-xs text-base-content/50">@{nickname}</p>}
           </div>
           <div className="flex flex-col py-1">

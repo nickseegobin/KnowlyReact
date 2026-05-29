@@ -300,7 +300,7 @@ export default function ClassQuestPage({
         <div className="sticky bottom-0 bg-base-100 pt-3 pb-2 -mx-4 px-4 border-t border-base-200">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-xl">💎</span>
-            <p className="text-sm font-semibold">{quest?.gem_cost ?? 3} Blue Gems to start</p>
+            <p className="text-sm font-semibold">{quest?.gem_cost ?? '…'} Blue Gem{quest?.gem_cost !== 1 ? 's' : ''} to start</p>
           </div>
           {gemReward > 0 && (
             <p className="text-xs text-success font-semibold mb-2">+{gemReward} bonus gems on completion</p>

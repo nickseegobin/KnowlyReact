@@ -6,8 +6,38 @@ import Image from 'next/image'
 import Link from 'next/link'
 import {
   Gem, BarChart2, Bell, UserPlus, ChevronRight,
+  ClipboardCheck, Compass, BookOpen,
 } from 'lucide-react'
 import type { AuthUser, ChildProfile } from '@/types/knowly'
+
+type StatsPeriod = 'week' | 'month' | 'all'
+
+interface ChildActivityStats {
+  user_id:         number
+  trial_count:     number
+  quest_count:     number
+  lesson_count:    number
+  weekly_trials:   number
+  weekly_quests:   number
+  weekly_lessons:  number
+  monthly_trials:  number
+  monthly_quests:  number
+  monthly_lessons: number
+}
+
+const STAT_PERIODS: { value: StatsPeriod; label: string }[] = [
+  { value: 'week',  label: 'This Week'  },
+  { value: 'month', label: 'This Month' },
+  { value: 'all',   label: 'All Time'   },
+]
+
+function pickCount(stats: ChildActivityStats | undefined, period: StatsPeriod, key: 'trials' | 'quests' | 'lessons'): number {
+  if (!stats) return 0
+  if (period === 'week')  return stats[`weekly_${key}`]  ?? 0
+  if (period === 'month') return stats[`monthly_${key}`] ?? 0
+  const map = { trials: stats.trial_count, quests: stats.quest_count, lessons: stats.lesson_count }
+  return map[key] ?? 0
+}
 
 function timeGreeting(): string {
   const h = new Date().getHours()
@@ -62,16 +92,31 @@ export default function ParentProfilePage() {
   const [gemBalance, setGemBalance] = useState(0)
   const [loading,    setLoading]    = useState(true)
 
+  const [childStats,   setChildStats]   = useState<Record<number, ChildActivityStats>>({})
+  const [statsPeriod,  setStatsPeriod]  = useState<StatsPeriod>('week')
+
   const [amounts,  setAmounts]  = useState<Record<number, number>>({})
   const [sending,  setSending]  = useState<Record<number, boolean>>({})
   const [feedback, setFeedback] = useState<Record<number, { ok: boolean; msg: string }>>({})
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((r) => r.json())
-      .then((data: AuthUser) => {
-        setUser(data)
-        setGemBalance(data.gem_balance ?? 0)
+    Promise.all([
+      fetch('/api/auth/me').then((r) => r.json()),
+      fetch('/api/analytics/self').then((r) => r.ok ? r.json() : null).catch(() => null),
+    ])
+      .then(([userData, analyticsData]) => {
+        setUser(userData)
+        setGemBalance(userData.gem_balance ?? 0)
+
+        if (analyticsData) {
+          const map: Record<number, ChildActivityStats> = {}
+          if (Array.isArray(analyticsData.children)) {
+            analyticsData.children.forEach((c: ChildActivityStats) => { map[c.user_id] = c })
+          } else if (analyticsData.user_id) {
+            map[analyticsData.user_id] = analyticsData as ChildActivityStats
+          }
+          setChildStats(map)
+        }
       })
       .catch(() => router.push('/login'))
       .finally(() => setLoading(false))
@@ -151,9 +196,24 @@ export default function ParentProfilePage() {
         </div>
       ) : (
         <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <p className="font-semibold text-base">Your Children</p>
             <div className="flex-1 h-px bg-base-200" />
+            <div className="flex gap-0.5 bg-base-200 rounded-lg p-0.5">
+              {STAT_PERIODS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setStatsPeriod(value)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    statsPeriod === value
+                      ? 'bg-base-100 shadow-sm text-base-content'
+                      : 'text-base-content/50 hover:text-base-content'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {children.map((child) => {
@@ -162,6 +222,8 @@ export default function ParentProfilePage() {
             const lvl       = child.level ? levelLabel(child.level) : ''
             const per       = child.period ? periodLabel(child.period) : ''
             const subtitle  = [lvl, per].filter(Boolean).join(' · ')
+
+            const stats = childStats[child.child_id]
 
             return (
               <div key={child.child_id} className="bg-base-200 rounded-2xl p-4 flex flex-col gap-4">
@@ -186,6 +248,31 @@ export default function ParentProfilePage() {
                   >
                     Progress <ChevronRight size={12} />
                   </Link>
+                </div>
+
+                {/* Activity counters */}
+                <div className="flex gap-2 flex-wrap">
+                  {(() => {
+                    const t = pickCount(stats, statsPeriod, 'trials')
+                    const q = pickCount(stats, statsPeriod, 'quests')
+                    const l = pickCount(stats, statsPeriod, 'lessons')
+                    return (
+                      <>
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-base-100 text-xs font-medium">
+                          <ClipboardCheck size={11} className="text-warning" />
+                          {t} {t === 1 ? 'trial' : 'trials'}
+                        </span>
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-base-100 text-xs font-medium">
+                          <Compass size={11} className="text-primary" />
+                          {q} {q === 1 ? 'quest' : 'quests'}
+                        </span>
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-base-100 text-xs font-medium">
+                          <BookOpen size={11} className="text-info" />
+                          {l} {l === 1 ? 'lesson' : 'lessons'}
+                        </span>
+                      </>
+                    )
+                  })()}
                 </div>
 
                 {/* Gem assignment row */}

@@ -30,7 +30,7 @@ export default function PinPage() {
       if (!res.ok) { setError(data.message ?? 'Failed to set PIN'); return }
 
       // PIN set — parent now goes to add their first child
-      router.push('/register/add-child')
+      router.push('/register/add-child?signup=1')
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {

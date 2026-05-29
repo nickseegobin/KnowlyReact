@@ -40,7 +40,9 @@ export default function ParentLayout({ children, user, blueGems }: Props) {
   const avatarRef = useRef<HTMLDivElement>(null)
   const { unread, refresh: refreshCount } = useUnreadCount()
 
-  const [liveBlue, setLiveBlue] = useState(blueGems)
+  const [liveBlue,        setLiveBlue]        = useState(blueGems)
+  const [liveAvatarIndex, setLiveAvatarIndex] = useState(user.avatar_index ?? 1)
+  const [liveDisplayName, setLiveDisplayName] = useState(user.display_name)
 
   const refreshGems = useCallback(async () => {
     try {
@@ -72,6 +74,16 @@ export default function ParentLayout({ children, user, blueGems }: Props) {
   }, [])
 
   useEffect(() => {
+    function onProfileUpdate(e: Event) {
+      const detail = (e as CustomEvent<{ avatar_index?: number; display_name?: string }>).detail
+      if (typeof detail?.avatar_index === 'number') setLiveAvatarIndex(detail.avatar_index)
+      if (typeof detail?.display_name === 'string') setLiveDisplayName(detail.display_name)
+    }
+    window.addEventListener('knowly:profile-update', onProfileUpdate)
+    return () => window.removeEventListener('knowly:profile-update', onProfileUpdate)
+  }, [])
+
+  useEffect(() => {
     function handler(e: MouseEvent) {
       if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
         setAvatarMenuOpen(false)
@@ -98,8 +110,8 @@ export default function ParentLayout({ children, user, blueGems }: Props) {
         className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-base-300 focus:outline-none"
       >
         <Image
-          src={`/avatars/adults/avatar-${user.avatar_index ?? 1}.png`}
-          alt={user.display_name}
+          src={`/avatars/adults/avatar-${liveAvatarIndex}.png`}
+          alt={liveDisplayName}
           width={36}
           height={36}
           className="object-cover w-full h-full"
@@ -114,7 +126,7 @@ export default function ParentLayout({ children, user, blueGems }: Props) {
       {avatarMenuOpen && (
         <div className="absolute right-0 top-11 w-56 bg-base-100 rounded-box shadow-xl border border-base-200 z-50 py-2">
           <div className="px-4 py-2 border-b border-base-200">
-            <p className="font-semibold text-sm">{user.display_name}</p>
+            <p className="font-semibold text-sm">{liveDisplayName}</p>
             <p className="text-xs text-base-content/50">Parent Account</p>
           </div>
           <div className="flex flex-col py-1">

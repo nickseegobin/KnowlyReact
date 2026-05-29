@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import type { AuthUser } from '@/types/knowly'
-
-const AVATAR_COUNT = 10
+import AvatarPicker from '@/components/AvatarPicker'
 
 export default function ParentSettingsPage() {
   const router = useRouter()
@@ -53,6 +51,9 @@ export default function ParentSettingsPage() {
       } else {
         setUser(data)
         setSuccess('Profile updated.')
+        window.dispatchEvent(new CustomEvent('knowly:profile-update', {
+          detail: { avatar_index: avatarIndex, display_name: displayName.trim() },
+        }))
       }
     } catch {
       setError('Something went wrong.')
@@ -84,26 +85,7 @@ export default function ParentSettingsPage() {
             <p className="font-semibold text-base">Profile Picture</p>
             <div className="flex-1 h-px bg-base-200" />
           </div>
-          <div className="grid grid-cols-5 gap-2">
-            {Array.from({ length: AVATAR_COUNT }, (_, i) => i + 1).map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setAvatarIndex(n)}
-                className={`rounded-full overflow-hidden border-4 transition-colors ${
-                  avatarIndex === n ? 'border-primary' : 'border-base-300 hover:border-base-content/30'
-                }`}
-              >
-                <Image
-                  src={`/avatars/adults/avatar-${n}.png`}
-                  alt={`Avatar ${n}`}
-                  width={52}
-                  height={52}
-                  className="object-cover w-full h-full"
-                />
-              </button>
-            ))}
-          </div>
+          <AvatarPicker type="adults" selected={avatarIndex} onSelect={setAvatarIndex} />
         </div>
 
         {/* ── Account Info ── */}

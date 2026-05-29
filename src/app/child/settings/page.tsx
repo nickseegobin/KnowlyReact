@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import Breadcrumb from '@/components/child/Breadcrumb'
+import AvatarPicker from '@/components/AvatarPicker'
 import type { AuthUser, ChildProfile } from '@/types/knowly'
 
 export default function ChildSettingsPage() {
@@ -62,6 +62,9 @@ export default function ChildSettingsPage() {
       if (!res.ok) { setError(data.message ?? 'Save failed'); return }
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+      window.dispatchEvent(new CustomEvent('knowly:profile-update', {
+        detail: { avatar_index: avatarIndex, display_name: `${firstName} ${lastName}`.trim() },
+      }))
     } catch {
       setError('Something went wrong.')
     } finally {
@@ -93,35 +96,9 @@ export default function ChildSettingsPage() {
       </div>
 
       {/* Avatar selector */}
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-base-300">
-          <Image
-            src={`/avatars/children/avatar-${avatarIndex}.png`}
-            alt="Avatar"
-            width={80}
-            height={80}
-            className="object-cover w-full h-full"
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap justify-center">
-          {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-            <button
-              key={n}
-              onClick={() => setAvatarIndex(n)}
-              className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-colors ${
-                avatarIndex === n ? 'border-primary' : 'border-base-300'
-              }`}
-            >
-              <Image
-                src={`/avatars/children/avatar-${n}.png`}
-                alt={`Avatar ${n}`}
-                width={40}
-                height={40}
-                className="object-cover w-full h-full"
-              />
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-semibold text-base-content/60 uppercase tracking-wide">Profile Picture</p>
+        <AvatarPicker type="children" selected={avatarIndex} onSelect={setAvatarIndex} />
       </div>
 
       <form onSubmit={handleSave} className="flex flex-col gap-4">

@@ -55,9 +55,10 @@ export default function NotificationDetail({ notificationId, scope = 'self', can
       if (!found) { setError('Notification not found.'); return }
       setNotif(found)
 
-      // Mark as read silently
+      // Mark as read — awaited so the DB is confirmed updated before
+      // the user can navigate back and trigger a re-fetch
       if (!found.is_read) {
-        fetch(`/api/notifications/${notificationId}/read?scope=${scope}`, { method: 'POST' }).catch(() => {})
+        await fetch(`/api/notifications/${notificationId}/read?scope=${scope}`, { method: 'POST' }).catch(() => {})
         onRead?.()
       }
     } catch {

@@ -58,7 +58,7 @@ export default function NotificationsList({ detailBasePath, scope = 'self', onAl
   async function markAllRead() {
     setMarkingAll(true)
     try {
-      await fetch('/api/notifications/read-all', { method: 'POST' })
+      await fetch(`/api/notifications/read-all?scope=${scope}`, { method: 'POST' })
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
       onAllRead?.()
     } catch { /* ignore */ }
@@ -69,19 +69,21 @@ export default function NotificationsList({ detailBasePath, scope = 'self', onAl
     e.stopPropagation()
     setDeletingId(id)
     try {
-      await fetch(`/api/notifications/${id}`, { method: 'DELETE' })
+      await fetch(`/api/notifications/${id}?scope=${scope}`, { method: 'DELETE' })
       setNotifications((prev) => prev.filter((n) => n.id !== id))
       onAllRead?.()
     } catch { /* ignore */ }
     finally { setDeletingId(null) }
   }
 
-  function openNotification(n: KnowlyNotification) {
-    // Mark as read optimistically
+  async function openNotification(n: KnowlyNotification) {
     if (!n.is_read) {
-      fetch(`/api/notifications/${n.id}/read`, { method: 'POST' }).catch(() => {})
+      // Optimistic update immediately so the list reflects read state at once
       setNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, is_read: true } : x))
-      onAllRead?.() // trigger badge refresh
+      onAllRead?.()
+      // Await server confirmation before navigating — ensures DB is updated
+      // so back-navigation re-fetch sees is_read=1
+      await fetch(`/api/notifications/${n.id}/read?scope=${scope}`, { method: 'POST' }).catch(() => {})
     }
     router.push(`${detailBasePath}/${n.id}`)
   }

@@ -55,6 +55,7 @@ export default function AssignActivityPage() {
   // ── Lesson catalogue ──────────────────────────────────────────────────────
   const [level,             setLevel]             = useState('std_4')
   const [filterPeriod,      setFilterPeriod]      = useState('')
+  const [filterSubject,     setFilterSubject]     = useState('')
   const [lessons,           setLessons]           = useState<LessonEntry[]>([])
   const [lessonsLoading,    setLessonsLoading]    = useState(false)
   const [selectedLessons,   setSelectedLessons]   = useState<LessonEntry[]>([])
@@ -86,7 +87,8 @@ export default function AssignActivityPage() {
     setSectionSelections({})
     try {
       const qs = new URLSearchParams({ level })
-      if (filterPeriod) qs.set('period', filterPeriod)
+      if (filterPeriod)  qs.set('period',  filterPeriod)
+      if (filterSubject) qs.set('subject', filterSubject)
       const res = await fetch(`/api/lessons/teacher/catalogue?${qs}`)
       if (res.ok) {
         const data = await res.json()
@@ -94,7 +96,7 @@ export default function AssignActivityPage() {
       }
     } catch {}
     finally { setLessonsLoading(false) }
-  }, [taskType, level, filterPeriod])
+  }, [taskType, level, filterPeriod, filterSubject])
 
   useEffect(() => { fetchCatalogue() }, [fetchCatalogue])
 
@@ -230,7 +232,8 @@ export default function AssignActivityPage() {
   }
 
   // ── Build period → subject → lessons groups ───────────────────────────────
-  const usePeriodGrouping = !filterPeriod
+  const usePeriodGrouping  = !filterPeriod
+  const useSubjectGrouping = !filterSubject
 
   const periodGroups: Array<{
     period:   string
@@ -330,6 +333,15 @@ export default function AssignActivityPage() {
       {taskType === 'lesson' && (
         <div className="flex flex-col gap-5">
 
+          {/* Subject filter */}
+          <PillRow
+            label="Subject"
+            active={filterSubject}
+            options={[{ value: '', label: 'All Subjects' }, ...SUBJECTS.map(s => ({ value: s.value, label: s.label }))]}
+            onSelect={setFilterSubject}
+            activeClass="btn-primary"
+          />
+
           {/* Level filter */}
           <PillRow
             label="Level"
@@ -370,9 +382,11 @@ export default function AssignActivityPage() {
 
                   {subjects.map(({ subject: sKey, label: sLabel, lessons: subLessons }) => (
                     <div key={sKey} className="flex flex-col gap-1.5">
-                      <p className="text-xs font-bold text-base-content/40 uppercase tracking-wider px-1">
-                        {sLabel}
-                      </p>
+                      {useSubjectGrouping && (
+                        <p className="text-xs font-bold text-base-content/40 uppercase tracking-wider px-1">
+                          {sLabel}
+                        </p>
+                      )}
 
                       {subLessons.map((lesson) => {
                         const isSelected   = selectedLessons.some(l => l.quest_id === lesson.quest_id)

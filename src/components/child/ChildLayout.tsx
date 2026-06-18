@@ -7,11 +7,12 @@ import Link from 'next/link'
 import {
   Menu, Gem,
   Home, Compass, BookOpen, ClipboardCheck, Users,
-  Trophy, TrendingUp, Award, Newspaper,
+  Trophy, TrendingUp, Award, Newspaper, Sun, Moon,
 } from 'lucide-react'
 import type { AuthUser } from '@/types/knowly'
 import { useUnreadCount } from '@/hooks/useUnreadCount'
 import { unlockAudio } from '@/lib/audioUnlock'
+import { useTheme } from '@/hooks/useTheme'
 
 // Sidebar nav definition
 const STUDY_NAV = [
@@ -94,6 +95,8 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const { theme, toggle: toggleTheme } = useTheme()
+
   const activeChild = user.children?.find((c) => c.child_id === user.active_child_id) ?? user.children?.[0]
   const [liveAvatarIndex, setLiveAvatarIndex] = useState(activeChild?.avatar_index ?? 1)
   const [liveDisplayName, setLiveDisplayName] = useState(activeChild?.display_name ?? user.display_name)
@@ -165,6 +168,13 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
             </Link>
           </div>
           <div className="border-t border-base-200 flex flex-col py-1">
+            <button
+              onClick={toggleTheme}
+              className="px-4 py-2 text-sm hover:bg-base-200 flex items-center justify-between w-full text-left"
+            >
+              <span>{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</span>
+              {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+            </button>
             <Link href="/profiles" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>
               Switch Profile
             </Link>

@@ -6,8 +6,8 @@ export default function LandingPage() {
     <main className="min-h-screen">
       {/* ── Mobile: login only (left panel hidden) ── */}
       <div className="lg:hidden min-h-screen flex flex-col items-center justify-center p-8 gap-6 bg-base-100">
-        <h2 className="text-5xl font-bold">Knowley</h2>
-        <Link href="/login" className="btn btn-neutral btn-lg w-72">
+        <h2 className="text-5xl font-bold" style={{ color: '#3f2bcc' }}>Knowley</h2>
+        <Link href="/login" className="btn btn-lg w-72 text-white border-0" style={{ backgroundColor: '#3f2bcc' }}>
           Login
         </Link>
         <Link href="/register" className="btn btn-ghost btn-lg w-72 border border-base-300">
@@ -17,12 +17,12 @@ export default function LandingPage() {
 
       {/* ── Desktop: left animation + right login ── */}
       <div className="hidden lg:grid lg:grid-cols-2 h-screen">
-        <div className="bg-base-200 relative overflow-hidden flex items-center justify-center">
+        <div className="relative overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#3f2bcc' }}>
           <HomeLottiePanel />
         </div>
         <div className="flex flex-col items-center justify-center p-16 gap-6">
-          <h2 className="text-5xl font-bold mb-4">Knowley</h2>
-          <Link href="/login" className="btn btn-neutral btn-lg w-72">
+          <h2 className="text-5xl font-bold mb-4" style={{ color: '#3f2bcc' }}>Knowley</h2>
+          <Link href="/login" className="btn btn-lg w-72 text-white border-0" style={{ backgroundColor: '#3f2bcc' }}>
             Login
           </Link>
           <Link href="/register" className="btn btn-ghost btn-lg w-72 border border-base-300">

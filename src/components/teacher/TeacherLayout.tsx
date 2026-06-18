@@ -6,10 +6,11 @@ import Image from 'next/image'
 import Link from 'next/link'
 import {
   Menu, Gem,
-  Home, Users, Bell, Settings2, Newspaper, BarChart2, AlertTriangle,
+  Home, Users, Bell, Settings2, Newspaper, BarChart2, AlertTriangle, Sun, Moon,
 } from 'lucide-react'
 import type { TeacherProfile, ClassEntry } from '@/types/knowly'
 import { useUnreadCount } from '@/hooks/useUnreadCount'
+import { useTheme } from '@/hooks/useTheme'
 
 const MAIN_NAV = [
   { label: 'Home',          Icon: Home,     href: '/teacher/home',          iconClass: 'bg-primary/10 text-primary'  },
@@ -36,6 +37,7 @@ export default function TeacherLayout({ children, user }: Props) {
   const avatarRef = useRef<HTMLDivElement>(null)
   const { unread, refresh: refreshCount } = useUnreadCount()
 
+  const { theme, toggle: toggleTheme } = useTheme()
   const [liveRed,         setLiveRed]         = useState(user.red_gem_balance)
   const [liveAvatarIndex, setLiveAvatarIndex] = useState(user.avatar_index ?? 1)
   const [liveDisplayName, setLiveDisplayName] = useState(user.display_name)
@@ -138,6 +140,13 @@ export default function TeacherLayout({ children, user }: Props) {
             </Link>
           </div>
           <div className="border-t border-base-200 flex flex-col py-1">
+            <button
+              onClick={toggleTheme}
+              className="px-4 py-2 text-sm hover:bg-base-200 flex items-center justify-between w-full text-left"
+            >
+              <span>{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</span>
+              {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+            </button>
             <button onClick={handleLogout} className="px-4 py-2 text-sm text-left hover:bg-base-200">
               Sign Out
             </button>

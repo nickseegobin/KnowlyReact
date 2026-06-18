@@ -7,10 +7,11 @@ import Link from 'next/link'
 import {
   Menu, Gem,
   Home, BarChart2, Bell, UserPlus,
-  Receipt, Settings2, Newspaper,
+  Receipt, Settings2, Newspaper, Sun, Moon,
 } from 'lucide-react'
 import type { AuthUser } from '@/types/knowly'
 import { useUnreadCount } from '@/hooks/useUnreadCount'
+import { useTheme } from '@/hooks/useTheme'
 
 const MAIN_NAV = [
   { label: 'Home',          Icon: Home,      href: '/parent-profile',               iconClass: 'bg-primary/10 text-primary' },
@@ -40,6 +41,7 @@ export default function ParentLayout({ children, user, blueGems }: Props) {
   const avatarRef = useRef<HTMLDivElement>(null)
   const { unread, refresh: refreshCount } = useUnreadCount()
 
+  const { theme, toggle: toggleTheme } = useTheme()
   const [liveBlue,        setLiveBlue]        = useState(blueGems)
   const [liveAvatarIndex, setLiveAvatarIndex] = useState(user.avatar_index ?? 1)
   const [liveDisplayName, setLiveDisplayName] = useState(user.display_name)
@@ -149,6 +151,13 @@ export default function ParentLayout({ children, user, blueGems }: Props) {
             </Link>
           </div>
           <div className="border-t border-base-200 flex flex-col py-1">
+            <button
+              onClick={toggleTheme}
+              className="px-4 py-2 text-sm hover:bg-base-200 flex items-center justify-between w-full text-left"
+            >
+              <span>{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</span>
+              {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
+            </button>
             <Link href="/profiles" className="px-4 py-2 text-sm hover:bg-base-200" onClick={() => setAvatarMenuOpen(false)}>
               Switch Profile
             </Link>

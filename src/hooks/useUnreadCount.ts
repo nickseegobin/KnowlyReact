@@ -11,18 +11,18 @@ const POLL_INTERVAL_MS = 60_000
  * Per spec: polling must be paused during active Trial sessions (Block 9).
  * Pass `pause={true}` to suspend polling without unmounting.
  */
-export function useUnreadCount(pause = false) {
+export function useUnreadCount(pause = false, scope: 'self' | 'child' = 'self') {
   const [unread, setUnread] = useState(0)
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications/count')
+      const res = await fetch(`/api/notifications/count?scope=${scope}`)
       if (res.ok) {
         const data = await res.json()
         setUnread(data.unread ?? 0)
       }
     } catch { /* keep current value */ }
-  }, [])
+  }, [scope])
 
   // Initial fetch
   useEffect(() => {

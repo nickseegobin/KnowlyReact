@@ -7,6 +7,8 @@ import type { KnowlyNotification } from '@/types/knowly'
 interface Props {
   /** Base path for notification detail, e.g. "/teacher/notifications" */
   detailBasePath: string
+  /** Pass 'child' from child pages so WP resolves to the active child's notifications */
+  scope?: 'self' | 'child'
   /** Called after mark-all-read so the badge in the layout can decrement */
   onAllRead?: () => void
 }
@@ -30,7 +32,7 @@ function subjectLabel(subject: string) {
   return SUBJECT_LABELS[subject] ?? subject.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-export default function NotificationsList({ detailBasePath, onAllRead }: Props) {
+export default function NotificationsList({ detailBasePath, scope = 'self', onAllRead }: Props) {
   const router = useRouter()
   const [notifications, setNotifications] = useState<KnowlyNotification[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,14 +44,14 @@ export default function NotificationsList({ detailBasePath, onAllRead }: Props) 
     setLoading(true)
     try {
       const unreadOnly = showAll ? 'false' : 'true'
-      const res = await fetch(`/api/notifications?unread_only=${unreadOnly}`)
+      const res = await fetch(`/api/notifications?unread_only=${unreadOnly}&scope=${scope}`)
       if (res.ok) {
         const data = await res.json()
         setNotifications(data.notifications ?? [])
       }
     } catch { /* keep */ }
     finally { setLoading(false) }
-  }, [showAll])
+  }, [showAll, scope])
 
   useEffect(() => { fetchNotifications() }, [fetchNotifications])
 

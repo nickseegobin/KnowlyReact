@@ -17,8 +17,10 @@ interface ClassInvitationPayload {
   class_name: string
   child_id: number
   child_nickname?: string
+  child_name?: string  // legacy field — use child_nickname ?? child_name
   teacher_name: string
   school_name?: string
+  principal_name?: string
 }
 
 function timeAgo(dateStr: string): string {
@@ -171,6 +173,12 @@ export default function NotificationDetail({ notificationId, canRespond = false,
                   <span className="font-semibold">{payload.school_name}</span>
                 </div>
               )}
+              {payload.principal_name && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-base-content/60">Principal</span>
+                  <span className="font-semibold">{payload.principal_name}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -184,10 +192,10 @@ export default function NotificationDetail({ notificationId, canRespond = false,
                 <span className="text-base-content/60">Class</span>
                 <span className="font-semibold">{payload.class_name}</span>
               </div>
-              {payload.child_nickname && (
+              {(payload.child_nickname ?? payload.child_name) && (
                 <div className="flex justify-between text-sm">
                   <span className="text-base-content/60">Student</span>
-                  <span className="font-semibold">{payload.child_nickname}</span>
+                  <span className="font-semibold">{payload.child_nickname ?? payload.child_name}</span>
                 </div>
               )}
             </div>

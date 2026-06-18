@@ -11,7 +11,8 @@ export async function GET(req: NextRequest) {
     const limit      = req.nextUrl.searchParams.get('limit')       ?? '50'
     const offset     = req.nextUrl.searchParams.get('offset')      ?? '0'
 
-    const qs = new URLSearchParams({ unread_only: unreadOnly, limit, offset })
+    const scope = req.nextUrl.searchParams.get('scope') ?? 'self'
+    const qs = new URLSearchParams({ unread_only: unreadOnly, limit, offset, scope })
     const data = await wpFetch(`/notifications?${qs}`, 'GET', undefined, token)
     return NextResponse.json(data)
   } catch (err) {

@@ -3,5 +3,5 @@
 import NotificationsList from '@/components/notifications/NotificationsList'
 
 export default function ChildNotificationsPage() {
-  return <NotificationsList detailBasePath="/child/notifications" />
+  return <NotificationsList detailBasePath="/child/notifications" scope="child" />
 }

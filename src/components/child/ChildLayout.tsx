@@ -42,7 +42,7 @@ export default function ChildLayout({ children, user, blueGems }: Props) {
   const [drawerOpen,    setDrawerOpen]    = useState(false)
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const avatarRef = useRef<HTMLDivElement>(null)
-  const { unread, refresh: refreshCount } = useUnreadCount()
+  const { unread, refresh: refreshCount } = useUnreadCount(false, 'child')
 
   const [liveBlue, setLiveBlue] = useState(blueGems)
 

@@ -8,5 +8,5 @@ export default function ChildNotificationDetailPage() {
   const id = parseInt(params.id as string, 10)
 
   // Children receive simple (non-actionable) class invite notifications
-  return <NotificationDetail notificationId={id} canRespond={false} />
+  return <NotificationDetail notificationId={id} scope="child" canRespond={false} />
 }

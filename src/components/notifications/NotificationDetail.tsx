@@ -6,6 +6,8 @@ import type { KnowlyNotification } from '@/types/knowly'
 
 interface Props {
   notificationId: number
+  /** Pass 'child' from child detail pages so WP resolves to the active child */
+  scope?: 'self' | 'child'
   /** Whether this role can respond to confirmation notifications (parent only) */
   canRespond?: boolean
   /** Called after respond/read so layout badge refreshes */
@@ -34,7 +36,7 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`
 }
 
-export default function NotificationDetail({ notificationId, canRespond = false, onRead }: Props) {
+export default function NotificationDetail({ notificationId, scope = 'self', canRespond = false, onRead }: Props) {
   const router = useRouter()
   const [notif, setNotif] = useState<KnowlyNotification | null>(null)
   const [loading, setLoading] = useState(true)
@@ -46,8 +48,7 @@ export default function NotificationDetail({ notificationId, canRespond = false,
   const fetch_ = useCallback(async () => {
     setLoading(true)
     try {
-      // Fetch all notifications and find by id (no single-get proxy needed)
-      const res = await fetch('/api/notifications?unread_only=false&limit=100')
+      const res = await fetch(`/api/notifications?unread_only=false&limit=100&scope=${scope}`)
       if (!res.ok) { setError('Failed to load notification.'); return }
       const data = await res.json()
       const found = (data.notifications ?? []).find((n: KnowlyNotification) => n.id === notificationId)
@@ -56,7 +57,7 @@ export default function NotificationDetail({ notificationId, canRespond = false,
 
       // Mark as read silently
       if (!found.is_read) {
-        fetch(`/api/notifications/${notificationId}/read`, { method: 'POST' }).catch(() => {})
+        fetch(`/api/notifications/${notificationId}/read?scope=${scope}`, { method: 'POST' }).catch(() => {})
         onRead?.()
       }
     } catch {
@@ -64,7 +65,7 @@ export default function NotificationDetail({ notificationId, canRespond = false,
     } finally {
       setLoading(false)
     }
-  }, [notificationId, onRead])
+  }, [notificationId, scope, onRead])
 
   useEffect(() => { fetch_() }, [fetch_])
 
@@ -72,7 +73,7 @@ export default function NotificationDetail({ notificationId, canRespond = false,
     if (!notif) return
     setDeleting(true)
     try {
-      await fetch(`/api/notifications/${notif.id}`, { method: 'DELETE' })
+      await fetch(`/api/notifications/${notif.id}?scope=${scope}`, { method: 'DELETE' })
       onRead?.()
       router.back()
     } catch { /* ignore */ }

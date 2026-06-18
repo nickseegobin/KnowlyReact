@@ -127,7 +127,7 @@ export default function ClassLessonPage({
       const res = await fetch('/api/lessons/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quest_id: refId, source: 'assignment' }),
+        body: JSON.stringify({ quest_id: refId, source: 'assignment', task_id: parseInt(task_id, 10) }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message ?? 'Failed to start lesson')

@@ -22,7 +22,8 @@ function parseSegments(json: { markers?: { tm: number; cm: string }[]; op?: numb
   const totalFrames = json.op ?? 0
   const result: Record<string, Segment> = {}
   markers.forEach((m, i) => {
-    result[m.cm] = {
+    // AE/Bodymovin sometimes exports marker names with trailing \r — strip all whitespace.
+    result[m.cm.trim()] = {
       start: Math.round(m.tm),
       end:   Math.round(markers[i + 1]?.tm ?? totalFrames),
     }

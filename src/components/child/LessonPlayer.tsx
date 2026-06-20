@@ -4,6 +4,15 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Volume2, VolumeX, RotateCcw } from 'lucide-react'
 import QuestionRenderer from '@/components/QuestionRenderer'
 import { useLessonAudio } from '@/lib/useLessonAudio'
+import type { AudioMark, TagEvent } from '@/types/knowly'
+import { useDirector } from '@/lib/useDirector'
+import dynamic from 'next/dynamic'
+
+// Loaded client-side only — DotLottie uses Canvas/WASM that don't exist on Node.
+const DirectorLottiePanel = dynamic(
+  () => import('@/components/child/DirectorLottiePanel'),
+  { ssr: false },
+)
 import { useQuizAudio } from '@/lib/useQuizAudio'
 import { haptic, HAPTIC_CORRECT, HAPTIC_WRONG, HAPTIC_COMPLETE, HAPTIC_SELECT } from '@/lib/haptic'
 import { soundCorrect, soundWrong, soundSelect } from '@/lib/sound'
@@ -35,6 +44,10 @@ export interface Section {
   content?: string
   explanation?: string[]
   explanation_audio?: (string | null)[]
+  /** Word-timing marks from Polly. Index [paraIdx][wordIdx]. Present when marks have been generated. */
+  explanation_marks?: AudioMark[][]
+  /** URL to a .lottie animation file for this section. Null/absent = text-only mode. */
+  lottie_url?: string | null
   knowledge_check?: KnowledgeCheck[]
   worked_examples?: WorkedExample[]
   objectives_covered?: string[]
@@ -99,6 +112,42 @@ const COMBO_MESSAGES: Record<number, string> = {
   10: '🏆 Legendary!',
 }
 
+// ── DirectorRenderer ──────────────────────────────────────────────────────────
+
+interface DirectorRendererProps {
+  hasLottie: boolean
+  hasMarks: boolean
+  displayText: string
+  activeLottieCommand: TagEvent | null
+  lottieUrl: string | null | undefined
+  paraIdx: number
+  activeSentenceIdx: number
+}
+
+function DirectorRenderer({ hasLottie, hasMarks, displayText, activeLottieCommand, lottieUrl, paraIdx, activeSentenceIdx }: DirectorRendererProps) {
+  const textKey = `para-${paraIdx}-${activeSentenceIdx}`
+  if (hasLottie && hasMarks && lottieUrl) {
+    // Mode 2: Lottie panel (top 7/8) + subtitle strip (bottom 1/8)
+    return (
+      <>
+        <div className="w-full aspect-video rounded-xl overflow-hidden bg-base-300/40">
+          <DirectorLottiePanel src={lottieUrl} activeLottieCommand={activeLottieCommand} />
+        </div>
+        <p key={textKey} className="text-sm leading-relaxed text-base-content/80 text-center max-w-xl w-full px-2">
+          <QuestionRenderer text={displayText} splitAnimate narrate />
+        </p>
+      </>
+    )
+  }
+
+  // Mode 1 (marks, no lottie) or Legacy (no marks): full-width text panel
+  return (
+    <p key={textKey} className="text-base leading-relaxed text-base-content max-w-xl w-full">
+      <QuestionRenderer text={displayText} splitAnimate narrate />
+    </p>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LessonPlayer({
@@ -153,11 +202,11 @@ export default function LessonPlayer({
   const [isPlaying,     setIsPlaying]     = useState(false)
   const [isMuted,       setIsMuted]       = useState(false)
   const [narrationDone, setNarrationDone] = useState(true)
-  const chordFiredRef   = useRef(false)
+  const chordFiredRef       = useRef(false)
+  const [audioCurrentTimeMs, setAudioCurrentTimeMs] = useState(0)
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const currentSection = sections[sectionIdx]
-  const currentPara    = currentSection?.explanation?.[paraIdx] ?? ''
   const isLastPara     = paraIdx >= (currentSection?.explanation?.length ?? 1) - 1
   const currentCheck   = currentSection?.knowledge_check?.[checkIdx]
   const totalSections  = sections.length
@@ -165,6 +214,15 @@ export default function LessonPlayer({
   // ── Audio hooks ───────────────────────────────────────────────────────────
   const { playSlideChord }                   = useLessonAudio(currentSection?.explanation?.length ?? 0)
   const { playQuestion, playCorrect, playWrong } = useQuizAudio()
+
+  // ── Director (Synced Viewer) ───────────────────────────────────────────────
+  const {
+    hasLottie,
+    hasMarks,
+    activeLottieCommand,
+    displayText,
+    activeSentenceIdx,
+  } = useDirector(currentSection ?? null, paraIdx, audioCurrentTimeMs)
 
   // Fire question chord after the split-text animation finishes
   const questionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -186,6 +244,7 @@ export default function LessonPlayer({
     if (!audioRef.current) return
     audioRef.current.pause()
     chordFiredRef.current = false
+    setAudioCurrentTimeMs(0)
     if (phase !== 'lesson') { setNarrationDone(true); return }
     const url = currentSection?.explanation_audio?.[paraIdx] ?? null
     if (!url || isMuted) { setNarrationDone(true); return }
@@ -529,12 +588,16 @@ export default function LessonPlayer({
           onPause={() => setIsPlaying(false)}
           onError={() => setNarrationDone(true)}
           onTimeUpdate={() => {
-            if (chordFiredRef.current) return
             const audio = audioRef.current
-            if (!audio?.duration || audio.duration === Infinity) return
-            if (audio.duration - audio.currentTime <= 0.65) {
-              chordFiredRef.current = true
-              playSlideChord(paraIdx)
+            if (!audio) return
+            const ms = Math.round(audio.currentTime * 1000)
+            setAudioCurrentTimeMs(ms)
+            // Chord fire near audio end
+            if (!chordFiredRef.current && audio.duration && audio.duration !== Infinity) {
+              if (audio.duration - audio.currentTime <= 0.65) {
+                chordFiredRef.current = true
+                playSlideChord(paraIdx)
+              }
             }
           }}
         />
@@ -559,21 +622,29 @@ export default function LessonPlayer({
           <h2 className="text-xl font-bold mt-0.5">{currentSection?.title}</h2>
         </div>
 
-        <div className="relative rounded-2xl bg-base-200 p-8 shadow-sm min-h-[32vh] flex flex-col items-center justify-center gap-3">
+        <div className={`relative rounded-2xl bg-base-200 shadow-sm flex flex-col items-center justify-center gap-3 ${
+          hasLottie && hasMarks ? 'p-3' : 'p-8 min-h-[32vh]'
+        }`}>
           {(currentSection?.explanation_audio?.length ?? 0) > 0 && (
             <button
               type="button"
               onClick={() => setIsMuted(m => !m)}
-              className="absolute top-3 right-3 p-1.5 rounded-full text-base-content/30 hover:text-base-content/60 transition-colors"
+              className="absolute top-3 right-3 p-1.5 rounded-full text-base-content/30 hover:text-base-content/60 transition-colors z-10"
               aria-label={isMuted ? 'Unmute narration' : 'Mute narration'}
             >
               {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
             </button>
           )}
 
-          <p key={`para-${paraIdx}`} className="text-base leading-relaxed text-base-content max-w-xl w-full">
-            <QuestionRenderer text={currentPara} splitAnimate narrate />
-          </p>
+          <DirectorRenderer
+            hasLottie={hasLottie}
+            hasMarks={hasMarks}
+            displayText={displayText}
+            activeLottieCommand={activeLottieCommand}
+            lottieUrl={currentSection?.lottie_url}
+            paraIdx={paraIdx}
+            activeSentenceIdx={activeSentenceIdx}
+          />
 
           <div className="flex items-center justify-between w-full max-w-xl self-end">
             {isPlaying && !isMuted ? (

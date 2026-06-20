@@ -154,3 +154,35 @@ export const PERIODS = [
 
 export type Level = (typeof LEVELS)[number]['value']
 export type Period = (typeof PERIODS)[number]['value']
+
+// ── Synced Viewer — Director types ────────────────────────────────────────────
+
+/** One word-timing mark returned by Polly SynthesizeSpeech (JSON output format). */
+export interface AudioMark {
+  /** Offset in milliseconds from the start of the audio clip. */
+  time: number
+  /** The word at this timestamp. */
+  value: string
+}
+
+/** Valid inline Lottie sync tags authors embed in explanation paragraphs. */
+export type LottieTag =
+  | '[start]' | '[next]'
+  | '[m1]' | '[m2]' | '[m3]' | '[m4]' | '[m5]'
+  | '[m6]' | '[m7]' | '[m8]' | '[m9]' | '[m10]'
+
+/** Named markers in a .lottie file (positional convention m1–m10). */
+export type LottieMarker = 'm1' | 'm2' | 'm3' | 'm4' | 'm5' | 'm6' | 'm7' | 'm8' | 'm9' | 'm10'
+
+/**
+ * A tag event resolved by useDirector: the original tag is expanded to its
+ * concrete marker ([next] → m1, m2, … in order) and paired with an audio timestamp.
+ */
+export interface TagEvent {
+  /** Original tag as written in the explanation text. */
+  tag: LottieTag
+  /** Resolved Lottie marker to seek to (e.g. [next] #2 → 'm2'). */
+  marker: LottieMarker
+  /** Milliseconds from audio start — fires when currentTime crosses this value. */
+  triggerTime: number
+}

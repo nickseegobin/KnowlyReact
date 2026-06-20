@@ -264,7 +264,7 @@ function HookTestSuite({ onSnapshots }: { onSnapshots: (s: HookSnapshot[]) => vo
         assertions: [
           check(r0.hasLottie === false,          'hasLottie = false'),
           check(r0.hasMarks === false,           'hasMarks = false'),
-          check(r0.chunkEndTimeMs === null,      'chunkEndTimeMs = null'),
+          check(r0.activeSentenceIdx === 0,      'activeSentenceIdx = 0'),
           check(r0.activeLottieCommand === null, 'activeLottieCommand = null'),
           check(r0.displayText === '',           'displayText = ""'),
           check(r0.tagEvents.length === 0,       'tagEvents = []'),
@@ -277,7 +277,7 @@ function HookTestSuite({ onSnapshots }: { onSnapshots: (s: HookSnapshot[]) => vo
         assertions: [
           check(r1.hasLottie === false, 'hasLottie = false (no lottie_url)'),
           check(r1.hasMarks === false,  'hasMarks = false (no marks)'),
-          check(r1.chunkEndTimeMs === null, 'chunkEndTimeMs = null'),
+          check(r1.activeSentenceIdx === 0, 'activeSentenceIdx = 0 (no breaks)'),
           check(r1.displayText === 'A number is an idea.', 'displayText = original text'),
         ],
       },
@@ -288,7 +288,7 @@ function HookTestSuite({ onSnapshots }: { onSnapshots: (s: HookSnapshot[]) => vo
         assertions: [
           check(r2.hasLottie === true,  'hasLottie = true'),
           check(r2.hasMarks === true,   'hasMarks = true'),
-          check(r2.chunkEndTimeMs === 800, 'chunkEndTimeMs = last mark (800ms)'),
+          check(r2.activeSentenceIdx === 0, 'activeSentenceIdx = 0 (no [break] tags)'),
           // [start] fires at marks[0].time=0; triggerTime(0) <= audioMs(0) → fires immediately
           check(r2.activeLottieCommand?.marker === 'm1', 'activeLottieCommand = m1 (fired at t=0)'),
           check(r2.displayText === 'A number is an idea.', 'displayText has tags stripped'),
@@ -308,12 +308,12 @@ function HookTestSuite({ onSnapshots }: { onSnapshots: (s: HookSnapshot[]) => vo
         ],
       },
       {
-        label: 'audioMs=1000 — past chunkEndTimeMs (800ms)',
+        label: 'audioMs=1000 — past all marks',
         inputs: { section: SECTION_WITH_MARKS, paraIdx: 0, audioMs: 1000 },
         result: r4,
         assertions: [
-          check(r4.chunkEndTimeMs !== null && 1000 > r4.chunkEndTimeMs, 'audioMs > chunkEndTimeMs — caller should advance'),
           check(r4.activeLottieCommand?.marker === 'm1', 'last fired command still m1'),
+          check(r4.activeSentenceIdx === 0, 'activeSentenceIdx = 0 (no [break] tags)'),
         ],
       },
       {

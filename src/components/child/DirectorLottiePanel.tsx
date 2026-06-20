@@ -92,16 +92,12 @@ export default function DirectorLottiePanel({ src, activeLottieCommand }: Props)
       console.log('[Lottie] ✓ segment complete — holding')
     }
 
-    const onLoadError = (e: unknown) => console.error('[Lottie] load error:', e)
-
     dotLottie.addEventListener('load', onLoad)
     dotLottie.addEventListener('complete', onComplete)
-    dotLottie.addEventListener('loadError', onLoadError as EventListener)
 
     return () => {
       dotLottie.removeEventListener('load', onLoad)
       dotLottie.removeEventListener('complete', onComplete)
-      dotLottie.removeEventListener('loadError', onLoadError as EventListener)
     }
   }, [dotLottie, applyCommand])
 

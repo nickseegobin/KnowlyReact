@@ -66,7 +66,9 @@ export default function DirectorLottiePanel({ src, activeLottieCommand }: Props)
       console.warn(`[Lottie] marker not found: "${cmd.marker}" | known:`, Object.keys(segmentsRef.current))
       return
     }
-    dl.stop()
+    // Do NOT call stop() — it resets to absolute frame 0 before setSegment takes
+    // effect, causing a one-frame flash at frame 0 between segments.
+    // play() after setSegment() seeks to the new segment's start frame directly.
     dl.setLoop(false)
     dl.setSegment(seg.start, seg.end)
     dl.play()

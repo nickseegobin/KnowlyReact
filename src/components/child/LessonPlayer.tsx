@@ -133,7 +133,7 @@ function DirectorRenderer({ hasLottie, hasMarks, displayText, activeLottieComman
         <div className="w-full aspect-video rounded-xl overflow-hidden bg-base-300/40">
           <DirectorLottiePanel src={lottieUrl} activeLottieCommand={activeLottieCommand} />
         </div>
-        <p key={textKey} className="text-sm leading-relaxed text-base-content/80 text-center max-w-xl w-full px-2">
+        <p key={textKey} className="text-xl leading-relaxed text-base-content/80 text-center max-w-xl w-full px-6 py-3">
           <QuestionRenderer text={displayText} splitAnimate narrate />
         </p>
       </>
@@ -717,7 +717,7 @@ export default function LessonPlayer({
           <p className="text-xs text-base-content/40 mt-0.5">{currentSection?.title} · Q{checkIdx + 1} of {checks.length}</p>
         </div>
         <div className="rounded-2xl bg-base-200 p-8 shadow-sm min-h-[32vh] flex items-center justify-center">
-          <p className="text-base font-medium leading-relaxed text-center max-w-xl">
+          <p className="text-xl font-medium leading-relaxed text-center max-w-xl">
             <QuestionRenderer text={currentCheck?.question ?? ''} splitAnimate />
           </p>
         </div>
@@ -812,7 +812,7 @@ export default function LessonPlayer({
         </div>
         <p className="text-xs text-base-content/40">{item.sectionTitle}</p>
         <div className="rounded-2xl bg-base-200 p-8 shadow-sm min-h-[32vh] flex items-center justify-center">
-          <p className="text-base font-medium leading-relaxed text-center max-w-xl">
+          <p className="text-xl font-medium leading-relaxed text-center max-w-xl">
             <QuestionRenderer text={item.check.question} splitAnimate />
           </p>
         </div>

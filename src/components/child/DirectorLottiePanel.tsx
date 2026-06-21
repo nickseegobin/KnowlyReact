@@ -69,10 +69,10 @@ export default function DirectorLottiePanel({ src, activeLottieCommand }: Props)
     // Do NOT call stop() — it resets to absolute frame 0 before setSegment takes
     // effect, causing a one-frame flash at frame 0 between segments.
     // play() after setSegment() seeks to the new segment's start frame directly.
-    dl.setLoop(false)
+    dl.setLoop(cmd.loop)
     dl.setSegment(seg.start, seg.end)
     dl.play()
-    console.log(`[Lottie] ▶ ${cmd.marker} frames=${seg.start}–${seg.end}`)
+    console.log(`[Lottie] ▶ ${cmd.marker}${cmd.loop ? ' (loop)' : ''} frames=${seg.start}–${seg.end}`)
   }, [])
 
   // Wire animation lifecycle events once we have the player instance.

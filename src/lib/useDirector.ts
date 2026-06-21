@@ -6,7 +6,7 @@ import type { Section } from '@/components/child/LessonPlayer'
 
 // ── Tag parsing helpers ───────────────────────────────────────────────────────
 
-const TAG_RE = /\[(start|next|m\d+|break)\]/gi
+const TAG_RE = /\[(start|next|m\d+(?:-loop)?|break)\]/gi
 
 /**
  * Strip all inline director tags from text before rendering.
@@ -20,12 +20,12 @@ export function stripLottieTags(text: string): string {
 function tokenize(text: string): string[] {
   // Pad every tag with spaces so adjacent non-whitespace (e.g. "rule.[break]") never
   // gets absorbed into the greedy \S+ alternative.
-  const normalized = text.replace(/(\[(?:start|next|m\d+|break)\])/gi, ' $1 ')
-  return Array.from(normalized.matchAll(/\[(start|next|m\d+|break)\]|\S+/gi), (m) => m[0])
+  const normalized = text.replace(/(\[(?:start|next|m\d+(?:-loop)?|break)\])/gi, ' $1 ')
+  return Array.from(normalized.matchAll(/\[(start|next|m\d+(?:-loop)?|break)\]|\S+/gi), (m) => m[0])
 }
 
 function isLottieToken(token: string): boolean {
-  return /^\[(start|next|m\d+)\]$/i.test(token)
+  return /^\[(start|next|m\d+(?:-loop)?)\]$/i.test(token)
 }
 
 function isBreakToken(token: string): boolean {
@@ -61,17 +61,21 @@ export function parseTagEvents(rawText: string, marks: AudioMark[]): TagEvent[] 
 
       const lower = token.toLowerCase() as LottieTag
       let marker: LottieMarker
+      let loop = false
 
       if (lower === '[start]') {
         marker = 'm1'
       } else if (lower === '[next]') {
         nextCount++
         marker = `m${Math.min(nextCount, 10)}` as LottieMarker
+      } else if (lower.endsWith('-loop]')) {
+        loop = true
+        marker = lower.slice(1, -6) as LottieMarker  // '[m2-loop]' → 'm2'
       } else {
         marker = lower.slice(1, -1) as LottieMarker  // '[m2]' → 'm2'
       }
 
-      events.push({ tag: lower, marker, triggerTime: mark.time })
+      events.push({ tag: lower, marker, triggerTime: mark.time, loop })
     } else if (!isTagToken(token)) {
       // [break] and other non-tag tokens don't increment wordsSeen for Lottie,
       // but [break] is also a tag so it's handled by the else-if above.

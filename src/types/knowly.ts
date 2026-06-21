@@ -168,8 +168,10 @@ export interface AudioMark {
 /** Valid inline Lottie sync tags authors embed in explanation paragraphs. */
 export type LottieTag =
   | '[start]' | '[next]'
-  | '[m1]' | '[m2]' | '[m3]' | '[m4]' | '[m5]'
-  | '[m6]' | '[m7]' | '[m8]' | '[m9]' | '[m10]'
+  | '[m1]'      | '[m2]'      | '[m3]'      | '[m4]'      | '[m5]'
+  | '[m6]'      | '[m7]'      | '[m8]'      | '[m9]'      | '[m10]'
+  | '[m1-loop]' | '[m2-loop]' | '[m3-loop]' | '[m4-loop]' | '[m5-loop]'
+  | '[m6-loop]' | '[m7-loop]' | '[m8-loop]' | '[m9-loop]' | '[m10-loop]'
 
 /** Named markers in a .lottie file (positional convention m1–m10). */
 export type LottieMarker = 'm1' | 'm2' | 'm3' | 'm4' | 'm5' | 'm6' | 'm7' | 'm8' | 'm9' | 'm10'
@@ -185,4 +187,6 @@ export interface TagEvent {
   marker: LottieMarker
   /** Milliseconds from audio start — fires when currentTime crosses this value. */
   triggerTime: number
+  /** When true the segment loops continuously until the next command fires. */
+  loop: boolean
 }
